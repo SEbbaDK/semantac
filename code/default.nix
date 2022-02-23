@@ -8,6 +8,7 @@ pkgs.stdenv.mkDerivation {
 	buildInputs = [
     	(pkgs.haskellPackages.ghcWithPackages (hpkgs: [
         	hpkgs.optparse-applicative
+        	hpkgs.megaparsec
     	]))
 	];
 }

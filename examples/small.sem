@@ -1,0 +1,8 @@
+domain T : Integer 
+domain G : Syntax
+
+system T =>e G
+
+	
+
+end
