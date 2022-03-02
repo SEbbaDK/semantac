@@ -1,27 +1,35 @@
 #!/usr/bin/env runhaskell
 
-import Options.Applicative
-import Data.Semigroup ((<>))
+{-# LANGUAGE NamedFieldPuns #-}
 
-import Parser
+import Data.Bifunctor (second)
+import Data.Either (rights)
+import Data.Semigroup ((<>))
+import Data.Text (pack, unpack)
+import Options.Applicative
+import Parser (doParse)
 
 data Args = Args
-    { file  :: String
-    , latex :: Bool
-    }
+  { file :: String,
+    latex :: Bool
+  }
 
-parser = Args
+parser :: Parser Args
+parser =
+  Args
     <$> argument str (metavar "FILE")
     <*> switch (long "latex" <> short 'l' <> help "Print latex output")
 
-main = cli =<< execParser (info (parser <**> helper) ( fullDesc <> progDesc "test" <> header "test2" ))
+main :: IO ()
+main = cli =<< execParser (info (parser <**> helper) (fullDesc <> progDesc "test" <> header "test2"))
 
 cli :: Args -> IO ()
-cli (Args file False) = do
-    content <- readFile file
-    let parsed = doparse content
-    putStrLn parsed
-
-cli (Args file True) = do
-    putStrLn "latex mode"
-
+cli Args {file, latex = False} = do
+  content <- readFile file
+  case doParse $ pack content of
+    Left err ->
+      putStrLn "Parsing error"
+    Right ast ->
+      putStrLn ast
+cli Args {file, latex = True} = do
+  putStrLn "latex mode"
