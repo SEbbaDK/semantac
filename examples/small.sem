@@ -1,8 +1,24 @@
-domain T : Integer 
-domain G : Syntax
+domain Exp : e : Syntax
+domain Int : i : Integer 
 
-system T =>e G
+system Exp =>e Int [ nonterminating ]
 
-	
+rule Add [ ambiguous nonterminating ]
+<e1> =>e <i1>
+<e2> =>e <i2>
+----------------
+e1 "+" <e2> =>e <i>
+where: i = i1 +int i2
 
-end
+ambiguous
+nonterminating
+rule Add-2:
+<e1> =>e <i1>   <e2> =>e <i2>
+-----------------------------
+      e1 "+" <e2> =>e <i>
+where i = i1 +int i2
+
+rule Add:
+e1 "+" <e2> =>e <i>  \  <e1> =>e <i1>  <e2> =>e <i2>
+where i = i1 +int i2
+
