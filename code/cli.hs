@@ -5,9 +5,9 @@
 import Data.Bifunctor (second)
 import Data.Either (rights)
 import Data.Semigroup ((<>))
-import Data.Text (pack, unpack)
 import Options.Applicative
 import Parser (doParse)
+import Text.Megaparsec.Error (errorBundlePretty)
 
 data Args = Args
   { file :: String,
@@ -26,10 +26,10 @@ main = cli =<< execParser (info (parser <**> helper) (fullDesc <> progDesc "test
 cli :: Args -> IO ()
 cli Args {file, latex = False} = do
   content <- readFile file
-  case doParse $ pack content of
+  case doParse file content of
     Left err ->
-      putStrLn "Parsing error"
+      putStrLn $ "Parsing error\n" ++ (errorBundlePretty err)
     Right ast ->
-      putStrLn ast
+      putStrLn (show ast)
 cli Args {file, latex = True} = do
   putStrLn "latex mode"

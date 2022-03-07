@@ -1,7 +1,7 @@
-domain Exp : e : Syntax
-domain Int : i : Integer 
+domain Exp = Syntax
+domain Int = Integer 
 
-system Exp =>e Int [ nonterminating ]
+system Exp =>e Int
 
 rule Add [ ambiguous nonterminating ]
 <e1> =>e <i1>

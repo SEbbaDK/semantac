@@ -1,5 +1,16 @@
 {-# LANGUAGE NamedFieldPuns #-}
 
+module Ast where
+
+data Top = Top [Domain] [Rule]
+
+data Domain = Domain
+    { domain :: String
+    , spec :: Spec
+    }
+
+data Spec = Integer | Identifier | Cross [Spec] | Union [Spec]
+
 data Rule = Rule
     { name :: String
     , base :: Trans
