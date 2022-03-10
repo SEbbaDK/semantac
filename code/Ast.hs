@@ -88,4 +88,4 @@ instance Show Equality where
   show (Eq l r) = show l ++ " = " ++ show r
   show (InEq l r) = show l ++ " ≠ " ++ show r
 
-type Expr = String
+data Expr = EVar String | EOp String [Expr]
