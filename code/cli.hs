@@ -1,5 +1,3 @@
-#!/usr/bin/env runhaskell
-
 {-# LANGUAGE NamedFieldPuns #-}
 
 import Data.Bifunctor (second)
@@ -28,8 +26,8 @@ cli Args {file, latex = False} = do
   content <- readFile file
   case doParse file content of
     Left err ->
-      putStrLn $ "Parsing error\n" ++ (errorBundlePretty err)
+      putStrLn $ "Parsing error\n" ++ errorBundlePretty err
     Right ast ->
-      putStrLn (show ast)
+      print ast
 cli Args {file, latex = True} = do
   putStrLn "latex mode"
