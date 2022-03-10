@@ -2,6 +2,7 @@
 
 module Ast where
 
+-- AST-BEGIN
 data Top = Top [Domain] [Rule]
 
 data Domain = Domain
@@ -9,7 +10,10 @@ data Domain = Domain
     , spec :: Spec
     }
 
-data Spec = Integer | Identifier | Cross [Spec] | Union [Spec]
+data Spec = Integer
+          | Identifier
+          | Cross [Spec]
+          | Union [Spec]
 
 data Rule = Rule
     { name :: String
@@ -18,7 +22,8 @@ data Rule = Rule
     , properties :: [Property]
     }
 
-data Property = Ambiguous | Nonterminating
+data Property = Ambiguous
+              | Nonterminating
 
 data Trans = Trans
     { system :: String
@@ -27,9 +32,13 @@ data Trans = Trans
     }
 
 type Conf = [Elem]
-data Elem = Syntax | Variable String
+data Elem = Syntax
+          | Variable String
 
-data Premise = TPremise Trans | TEquality Equality
-data Equality = Eq Expr Expr | InEq Expr Expr
+data Premise = TPremise Trans
+             | TEquality Equality
+data Equality = Eq Expr Expr
+              | InEq Expr Expr
 type Expr = String
+-- AST-END
 
