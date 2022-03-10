@@ -5,21 +5,32 @@ module Ast where
 
 import           Data.List (intercalate)
 
-data Top = Top [Domain] [Rule]
+data Top = Top [Domain] [System] [Rule]
 
 data Domain = Domain
   { domain :: String
   , spec   :: Spec
   }
 
+data System = System
+  { arrow :: String
+  , initial :: String
+  , final :: String
+  }
+
 instance Show Top where
-  show (Top domains rules) =
+  show (Top domains systems rules) =
     intercalate "\n" (map show domains)
+      ++ intercalate "\n" (map show systems)
       ++ intercalate "\n" (map show rules)
 
 instance Show Domain where
   show Domain {domain, spec} =
     domain ++ " : " ++ show spec
+
+instance Show System where
+  show System {arrow, initial, final} =
+    arrow ++ " = " ++ initial ++ " × " ++ final
 
 data Spec = Integer | Identifier | Cross Spec Spec | Union Spec Spec
 

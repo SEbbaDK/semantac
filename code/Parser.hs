@@ -35,6 +35,16 @@ systemNameChars = "-=~|>#abcdefghjklmnop"
 systemNameParser :: Parser String
 systemNameParser = many (oneOf systemNameChars)
 
+systemParser = do
+  try (string "system")
+  s
+  initial <- try domainNameParser
+  s
+  system <- try systemNameParser
+  s
+  final <- try domainNameParser
+  return $ System { arrow = system, initial, final }
+
 value :: Parser a -> b -> Parser b
 value parser result = do
   try parser
@@ -92,6 +102,13 @@ comma = do
   string ","
   void s
 
+propertyParser :: Parser Property
+propertyParser =
+  try deterministic <|> terminating
+    where
+  deterministic = value (string "non-deterministic") NonDeterministic
+  terminating = value (string "non-terminating") NonTerminating
+
 confParser :: Parser Conf
 confParser =
   betweenS
@@ -115,6 +132,8 @@ premiseParser = error "todo"
 
 ruleParser :: Parser Rule
 ruleParser = do
+  properties <- propertyListParser
+  s
   string "rule"
   s
   name <- domainNameParser
@@ -122,26 +141,32 @@ ruleParser = do
   premises <- sepBy premiseParser lf
   ruleSepParser
   base <- transParser
-  return $ Rule {name, base, premises, properties = []}
+  return $ Rule {name, base, premises, properties}
   where
     ruleSepParser = string "---" >> many (char '-')
+    propertyListParser = many (do p <- propertyParser ; s ; return p)
 
 topParser :: Parser Top
 topParser =
-  topParser_ (Top [] [])
+  topParser_ (Top [] [] [])
   where
     topParser_ :: Top -> Parser Top
-    topParser_ (Top domains rules) =
-      value eof (Top domains rules)
-        <|> ( do
+    topParser_ (Top domains systems rules) =
+      value eof (Top domains systems rules)
+        <|> try ( do
                 lf
                 d <- domainParser
-                topParser_ $ Top (d : domains) rules
+                topParser_ $ Top (d : domains) systems rules
+            )
+        <|> try ( do
+                lf
+                s <- systemParser
+                topParser_ $ Top domains (s : systems) rules
             )
         <|> ( do
                 lf
                 r <- ruleParser
-                topParser_ $ Top domains (r : rules)
+                topParser_ $ Top domains systems (r : rules)
             )
 
 doParse :: String -> String -> Either (ParseErrorBundle Text Void) Top
