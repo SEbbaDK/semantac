@@ -1,14 +1,14 @@
-{-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE NamedFieldPuns    #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 module Parser where
 
-import Ast
-import Control.Monad (void)
-import Data.Text (Text, pack, unpack)
-import Data.Void (Void)
-import Text.Megaparsec
-import Text.Megaparsec.Char
+import           Ast
+import           Control.Monad              (void)
+import           Data.Text                  (Text, pack, unpack)
+import           Data.Void                  (Void)
+import           Text.Megaparsec
+import           Text.Megaparsec.Char
 import qualified Text.Megaparsec.Char.Lexer as L
 
 type Parser = Parsec Void Text
@@ -64,8 +64,8 @@ operSpecParser opCon op = do
 specParser :: Parser Spec
 specParser =
   try baseTypeParser
-    <|> try (operSpecParser Union (string "U"))
-    <|> try (operSpecParser Cross (string "×"))
+  <|> try (operSpecParser Union (string "U"))
+  <|> try (operSpecParser Cross (string "×"))
 
 domainParser :: Parser Domain
 domainParser = do

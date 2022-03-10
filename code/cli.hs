@@ -1,22 +1,23 @@
 {-# LANGUAGE NamedFieldPuns #-}
 
-import Data.Bifunctor (second)
-import Data.Either (rights)
-import Data.Semigroup ((<>))
-import Options.Applicative
-import Parser (doParse)
-import Text.Megaparsec.Error (errorBundlePretty)
+import           Data.Bifunctor        (second)
+import           Data.Either           (rights)
+import           Data.Semigroup        ((<>))
+import           Options.Applicative
+import           Parser                (doParse)
+import           Text.Megaparsec.Error (errorBundlePretty)
 
-data Args = Args
-  { file :: String,
-    latex :: Bool
-  }
+data Args
+  = Args
+    { file  :: String
+    , latex :: Bool
+    }
 
 parser :: Parser Args
 parser =
   Args
-    <$> argument str (metavar "FILE")
-    <*> switch (long "latex" <> short 'l' <> help "Print latex output")
+  <$> argument str (metavar "FILE")
+  <*> switch (long "latex" <> short 'l' <> help "Print latex output")
 
 main :: IO ()
 main = cli =<< execParser (info (parser <**> helper) (fullDesc <> progDesc "test" <> header "test2"))
