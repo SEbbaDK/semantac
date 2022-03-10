@@ -10,5 +10,6 @@ pkgs.stdenv.mkDerivation {
         	hpkgs.optparse-applicative
         	hpkgs.megaparsec
     	]))
+    	pkgs.stylish-haskell
 	];
 }

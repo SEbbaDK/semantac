@@ -89,3 +89,8 @@ instance Show Equality where
   show (InEq l r) = show l ++ " ≠ " ++ show r
 
 data Expr = EVar String | EOp String [Expr]
+
+instance Show Expr where
+  show (EVar s) = s
+  show (EOp o e) = o ++ " " ++ show e
+
