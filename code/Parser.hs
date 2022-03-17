@@ -45,7 +45,11 @@ systemParser = do
   system <- try systemNameParser
   ws
   final <- try domainNameParser
-  return $ System { arrow = system, initial, final }
+  return $ System
+    { arrow = system
+    , initial = Custom initial
+    , final = Custom final
+    }
 
 value :: Parser a -> b -> Parser b
 value parser result = do
