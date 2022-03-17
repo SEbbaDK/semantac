@@ -50,6 +50,7 @@ instance Show Spec where
   show Integer       = "Integer"
   show Identifier    = "Identifier"
   show (Custom name) = name
+  -- TODO: these unicode characters display as a '?' in my terminal...
   show (Cross l r)   = show l ++ " × " ++ show r
   show (Union l r)   = show l ++ " ∪ " ++ show r
 
@@ -88,7 +89,7 @@ data Trans
 
 instance Show Trans where
   show Trans {system, before, after} =
-    system ++ " = <" ++ show before ++ " , " ++ show after ++ ">"
+    show before ++ " " ++ system ++ " " ++ show after
 
 newtype Conf
   = Conf [Elem]
@@ -97,7 +98,7 @@ instance Show Conf where
   show (Conf []) = "<>"
   show (Conf (x : xs)) =
     let show_ []       = ""
-        show_ (x : xs) = ", " ++ show_ xs
+        show_ (x : xs) = ", " ++ show x ++ show_ xs
      in "<" ++ show x ++ show_ xs ++ ">"
 
 data Elem
