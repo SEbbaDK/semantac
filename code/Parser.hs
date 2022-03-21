@@ -68,14 +68,11 @@ baseTypeParser =
   value (string "Integer") Integer
     <|> value (string "Identifier") Identifier
 
-operSpecParser :: (Spec -> Spec -> Spec) -> Parser a -> Parser Spec
+operSpecParser :: ([Spec] -> Spec) -> Parser a -> Parser Spec
 operSpecParser opCon op = do
-  l <- try baseTypeParser
-  ws
-  try op
-  ws
-  r <- try specParser
-  return $ opCon l r
+  let sep = try (ws >> op >> ws)
+  xs <- sepBy (try baseTypeParser) sep
+  return $ opCon xs
 
 specParser :: Parser Spec
 specParser =
@@ -93,13 +90,13 @@ domainParser = do
   ws
   Domain name <$> specParser
 
-elemParser :: Parser Elem
+elemParser :: Parser Conf
 elemParser = elemVarParser <|> elemSyntaxParser
   where
-    elemSyntaxParser :: Parser Elem
+    elemSyntaxParser :: Parser Conf
     elemSyntaxParser = error "todo"
 
-    elemVarParser :: Parser Elem
+    elemVarParser :: Parser Conf
     elemVarParser = error "todo"
 
 comma :: Parser ()
@@ -119,7 +116,7 @@ confParser :: Parser Conf
 confParser =
   betweenS
     "<"
-    (fmap Conf (sepBy1 elemParser comma))
+    (fmap Tup (sepBy1 elemParser comma))
     ">"
 
 transParser :: Parser Trans

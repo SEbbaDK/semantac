@@ -42,17 +42,20 @@ instance Show System where
 data Spec
   = Integer
   | Identifier
+  | SSyntax
   | Custom String
-  | Cross Spec Spec
-  | Union Spec Spec
+  | Cross [Spec]
+  | Union [Spec]
+
+deriving instance Eq Spec
 
 instance Show Spec where
   show Integer       = "Integer"
   show Identifier    = "Identifier"
+  show SSyntax       = "Syntax"
   show (Custom name) = name
-  -- TODO: these unicode characters display as a '?' in my terminal...
-  show (Cross l r)   = show l ++ " × " ++ show r
-  show (Union l r)   = show l ++ " ∪ " ++ show r
+  show (Cross xs)   = intercalate " * " (fmap show xs)
+  show (Union xs)   = intercalate " | " (fmap show xs)
 
 data Rule
   = Rule
@@ -91,23 +94,15 @@ instance Show Trans where
   show Trans {system, before, after} =
     show before ++ " " ++ system ++ " " ++ show after
 
-newtype Conf
-  = Conf [Elem]
-
-instance Show Conf where
-  show (Conf []) = "<>"
-  show (Conf (x : xs)) =
-    let show_ []       = ""
-        show_ (x : xs) = ", " ++ show x ++ show_ xs
-     in "<" ++ show x ++ show_ xs ++ ">"
-
-data Elem
+data Conf
   = Syntax String
   | Variable String
+  | Tup [Conf]
 
-instance Show Elem where
+instance Show Conf where
   show (Syntax s)   = "\"" ++ s ++ "\""
   show (Variable x) = x
+  show (Tup xs)     = "<" ++ intercalate ", " (fmap show xs) ++ ">"
 
 data Premise
   = TPremise Trans

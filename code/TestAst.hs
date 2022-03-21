@@ -11,7 +11,7 @@ testDomains =
 
 testSystems :: [System]
 testSystems =
-    [System { arrow = "=>", initial = Custom "n", final = Custom "n" }
+    [ System { arrow = "=>", initial = Custom "n", final = Custom "n" }
     ]
 
 testRules :: [Rule]
@@ -20,8 +20,8 @@ testRules =
         { name = "Add"
         , base = Trans
             { system = "=>"
-            , before = Conf [ var "a", syn "+", var "b" ]
-            , after = Conf [ var "c" ]
+            , before = Tup [ var "a", syn "+", var "b" ]
+            , after = Tup [ var "c" ]
             }
         , premises = [ TEquality $ Eq (EVar "c") (EOp "+" [ EVar "a", EVar "b" ]) ]
         , properties = []
