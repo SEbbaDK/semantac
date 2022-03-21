@@ -8,18 +8,17 @@ import           Data.List (intercalate, intersperse)
 data Top
   = Top [Domain] [System] [Rule]
 
-data Domain
-  = Domain
-    { domain :: String
-    , spec   :: Spec
-    }
+data Domain = Domain
+  { domain   :: String
+  , variable :: String
+  , spec     :: Spec
+  }
 
-data System
-  = System
-    { arrow   :: String
-    , initial :: Spec
-    , final   :: Spec
-    }
+data System = System
+  { arrow   :: String
+  , initial :: Spec
+  , final   :: Spec
+  }
 
 instance Show Top where
   show (Top domains systems rules) =
@@ -32,8 +31,8 @@ instance Show Top where
         ]
 
 instance Show Domain where
-  show Domain {domain, spec} =
-    domain ++ " : " ++ show spec
+  show Domain {domain, variable, spec} =
+    variable ++ " ∈ " ++ domain ++ " : " ++ show spec
 
 instance Show System where
   show System {arrow, initial, final} =

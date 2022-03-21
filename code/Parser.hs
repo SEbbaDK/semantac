@@ -20,8 +20,8 @@ ws =
     (L.skipLineComment "#")
     (L.skipBlockComment "#*" "*#")
 
-lf :: Parser ()
-lf = label "premise seperator" $ do
+premiseSeparator :: Parser ()
+premiseSeparator = label "premise seperator" $ do
   try (string "   ") <|> string "\n"
   ws
 
@@ -63,6 +63,13 @@ betweenS left middle right = do
   string right
   return res
 
+betweenCharEscaped :: Char -> Parser [Char]
+betweenCharEscaped delimiter = do
+  char delimiter
+  res <- many $ satisfy (\c -> c /= delimiter)
+  char delimiter
+  return res
+
 baseTypeParser :: Parser Spec
 baseTypeParser =
   value (string "Integer") Integer
@@ -83,21 +90,28 @@ specParser =
   <|> try (operSpecParser Union (string "U"))
   <|> try (operSpecParser Cross (string "×"))
 
+domainVariableBaseParser = some lowerChar
+
 domainParser :: Parser Domain
 domainParser = do
   try (string "domain")
   ws
+  variable <- domainVariableBaseParser
+  ws
+  string "∈" <|> string "in"
+  ws
   name <- domainNameParser
   ws
-  string "="
+  char ':'
   ws
-  Domain name <$> specParser
+  spec <- specParser
+  return Domain { domain = name, variable, spec }
 
 elemParser :: Parser Elem
-elemParser = elemVarParser <|> elemSyntaxParser
+elemParser = try elemSyntaxParser <|> elemVarParser
   where
     elemSyntaxParser :: Parser Elem
-    elemSyntaxParser = error "todo"
+    elemSyntaxParser = betweenCharEscaped '"' >>= \s -> return $ Syntax s
 
     elemVarParser :: Parser Elem
     elemVarParser = error "todo"
@@ -124,8 +138,6 @@ confParser =
 
 transParser :: Parser Trans
 transParser = do
-  try (string "system")
-  ws
   before <- confParser
   ws
   system <- systemNameParser
@@ -134,7 +146,15 @@ transParser = do
   return $ Trans {system, before, after}
 
 premiseParser :: Parser Premise
-premiseParser = error "todo"
+premiseParser = try (
+  do
+    t <- try transParser -- <|> do error "todo"
+    return $ TPremise t
+  ) <|> (
+  do
+    let e = error "Add premise equality"
+    return $ TEquality $ Eq (EVar "x") (EVar "x")
+  )
 
 ruleParser :: Parser Rule
 ruleParser = do
@@ -144,7 +164,7 @@ ruleParser = do
   ws
   name <- domainNameParser
   ws
-  premises <- sepBy premiseParser lf
+  premises <- sepBy premiseParser premiseSeparator
   ruleSepParser
   base <- transParser
   return $ Rule {name, base, premises, properties}
