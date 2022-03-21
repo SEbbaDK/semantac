@@ -1,5 +1,5 @@
-domain Exp = Identifier
-domain Int = Integer 
+domain e in Exp : Identifier
+domain i in Int : Integer 
 
 system Exp =>e Int
 
