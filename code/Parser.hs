@@ -126,11 +126,14 @@ propertyParser =
   deterministic = value (string "non-deterministic") NonDeterministic
   terminating = value (string "non-terminating") NonTerminating
 
+confPartParser =
+  elemParser `sepBy` ws >>= \e -> return $ Tup e
+
 confParser :: Parser Conf
 confParser =
   betweenS
     "<"
-    (fmap Tup (elemParser `sepBy` comma))
+    (fmap Tup (confPartParser `sepBy` comma))
     ">"
 
 transParser :: Parser Trans
@@ -175,7 +178,7 @@ topParser =
   where
     topParser_ :: Top -> Parser Top
     topParser_ (Top domains systems rules) =
-      value eof (Top domains systems rules)
+      value (ws >> eof) (Top domains systems rules)
         <|> try ( do
                 ws
                 d <- domainParser
@@ -186,7 +189,7 @@ topParser =
                 s <- systemParser
                 topParser_ $ Top domains (s : systems) rules
             )
-        <|> ( do
+        <|> try ( do
                 ws
                 r <- ruleParser
                 topParser_ $ Top domains systems (r : rules)
