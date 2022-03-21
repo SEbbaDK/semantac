@@ -4,7 +4,7 @@ domain Int = Integer
 system Exp =>e Int
 
 rule Add [ non-deterministic non-terminating ]
-<e1> =>e <i1>
+< e1 > =>e < i1 >
 <e2> =>e <i2>
 ----------------
 e1 "+" <e2> =>e <i>

@@ -21,7 +21,7 @@ ws =
     (L.skipBlockComment "#*" "*#")
 
 premiseSeparator :: Parser ()
-premiseSeparator = label "premise seperator" $ do
+premiseSeparator = label "premise separator" $ do
   try (string "   ") <|> string "\n"
   ws
 
@@ -111,7 +111,7 @@ elemParser = try elemSyntaxParser <|> elemVarParser
     elemSyntaxParser = betweenCharEscaped '"' >>= \s -> return $ Syntax s
 
     elemVarParser :: Parser Conf
-    elemVarParser = error "todo"
+    elemVarParser = (some alphaNumChar) >>= \s -> return $ Variable s
 
 comma :: Parser ()
 comma = do
@@ -130,12 +130,12 @@ confParser :: Parser Conf
 confParser =
   betweenS
     "<"
-    (fmap Tup (sepBy1 elemParser comma))
+    (fmap Tup (elemParser `sepBy` comma))
     ">"
 
 transParser :: Parser Trans
 transParser = do
-  before <- confParser
+  before <- try confParser
   ws
   system <- systemNameParser
   ws
@@ -145,7 +145,7 @@ transParser = do
 premiseParser :: Parser Premise
 premiseParser = try (
   do
-    t <- try transParser -- <|> do error "todo"
+    t <- transParser
     return $ TPremise t
   ) <|> (
   do
@@ -161,12 +161,12 @@ ruleParser = do
   ws
   name <- domainNameParser
   ws
-  premises <- sepBy premiseParser premiseSeparator
+  premises <- premiseParser `sepBy` premiseSeparator
   ruleSepParser
   base <- transParser
   return $ Rule {name, base, premises, properties}
   where
-    ruleSepParser = string "---" >> many (char '-')
+    ruleSepParser = string "---" >> many (char '-') >> ws
     propertyListParser = many (do p <- propertyParser ; ws ; return p)
 
 topParser :: Parser Top
