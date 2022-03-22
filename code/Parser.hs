@@ -1,5 +1,7 @@
 {-# LANGUAGE NamedFieldPuns    #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
+{-# HLINT ignore "Avoid lambda using `infix`" #-}
 
 module Parser where
 
@@ -108,10 +110,10 @@ elemParser :: Parser Conf
 elemParser = try elemSyntaxParser <|> elemVarParser
   where
     elemSyntaxParser :: Parser Conf
-    elemSyntaxParser = betweenCharEscaped '"' >>= \s -> return $ Syntax s
+    elemSyntaxParser = fmap Syntax (betweenCharEscaped '"')
 
     elemVarParser :: Parser Conf
-    elemVarParser = (some alphaNumChar) >>= \s -> return $ Variable s
+    elemVarParser = fmap Variable (some alphaNumChar)
 
 comma :: Parser ()
 comma = do
@@ -123,8 +125,8 @@ propertyParser :: Parser Property
 propertyParser =
   try deterministic <|> terminating
     where
-  deterministic = value (string "non-deterministic") NonDeterministic
-  terminating = value (string "non-terminating") NonTerminating
+      deterministic = value (string "non-deterministic") NonDeterministic
+      terminating = value (string "non-terminating") NonTerminating
 
 confPartParser =
   elemParser `sepBy` ws >>= \e -> return $ Tup e

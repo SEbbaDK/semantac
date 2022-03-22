@@ -6,6 +6,7 @@ import           Data.Semigroup        ((<>))
 import           Options.Applicative
 import           Parser                (doParse)
 import           Text.Megaparsec.Error (errorBundlePretty)
+import           Typer                 (CheckResult (Ok), check)
 
 data Args
   = Args
@@ -28,7 +29,11 @@ cli Args {file, latex = False} = do
   case doParse file content of
     Left err ->
       putStrLn $ "Parsing error\n" ++ errorBundlePretty err
-    Right ast ->
+    Right ast -> do
       print ast
+      putStrLn "\n"
+      case check ast of
+        Ok  -> putStrLn "Passed"
+        err -> putStrLn $ "Error: " ++ show err
 cli Args {file, latex = True} = do
   putStrLn "latex mode"

@@ -5,8 +5,8 @@ import           Data.Sequence ((|>))
 
 testDomains :: [Domain]
 testDomains =
-    [ Domain { domain = "n", spec = Integer }
-    , Domain { domain = "x", spec = Identifier }
+    [ Domain { domain = "Int", variable = "n", spec = Integer }
+    , Domain { domain = "Id", variable = "x", spec = Identifier }
     ]
 
 testSystems :: [System]
