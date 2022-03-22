@@ -31,7 +31,7 @@ instance Show Top where
         , [""]
         , map show systems
         , [""]
-        , map show rules
+        , intersperse "" (map show rules)
         ]
 
 instance Show Domain where

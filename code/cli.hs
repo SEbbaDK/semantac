@@ -33,7 +33,7 @@ cli Args {file, latex = False} = do
       print ast
       putStrLn "\n"
       case check ast of
-        Ok  -> putStrLn "Passed"
+        Ok  -> putStrLn "Checks passed"
         err -> putStrLn $ "Error: " ++ show err
 cli Args {file, latex = True} = do
   putStrLn "latex mode"

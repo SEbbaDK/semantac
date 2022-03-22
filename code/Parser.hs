@@ -27,6 +27,12 @@ premiseSeparator = label "premise separator" $ do
   try (string "   ") <|> string "\n"
   ws
 
+varNameParser :: Parser String
+varNameParser = do
+  start <- some alphaNumChar
+  end <- try (fmap unpack (string "'")) <|> return ""
+  return $ start ++ end
+
 domainNameParser :: Parser String
 domainNameParser = do
   c <- try upperChar
@@ -113,7 +119,7 @@ elemParser = try elemSyntaxParser <|> elemVarParser
     elemSyntaxParser = fmap Syntax (betweenCharEscaped '"')
 
     elemVarParser :: Parser Conf
-    elemVarParser = fmap Variable (some alphaNumChar)
+    elemVarParser = fmap Variable varNameParser
 
 comma :: Parser ()
 comma = do
@@ -148,15 +154,8 @@ transParser = do
   return $ Trans {system, before, after}
 
 premiseParser :: Parser Premise
-premiseParser = try (
-  do
-    t <- transParser
-    return $ TPremise t
-  ) <|> (
-  do
-    let e = error "Add premise equality"
-    return $ TEquality $ Eq (EVar "x") (EVar "x")
-  )
+-- Add premise equality
+premiseParser = try (TPremise <$> transParser) <|> return (TEquality $ Eq (EVar "x") (EVar "x"))
 
 ruleParser :: Parser Rule
 ruleParser = do
