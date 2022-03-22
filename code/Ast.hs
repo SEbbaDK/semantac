@@ -8,17 +8,19 @@ import           Data.List (intercalate, intersperse)
 data Top
   = Top [Domain] [System] [Rule]
 
-data Domain = Domain
-  { domain   :: String
-  , variable :: String
-  , spec     :: Spec
-  }
+data Domain
+  = Domain
+    { domain   :: String
+    , variable :: String
+    , spec     :: Spec
+    }
 
-data System = System
-  { arrow   :: String
-  , initial :: Spec
-  , final   :: Spec
-  }
+data System
+  = System
+    { arrow   :: String
+    , initial :: Spec
+    , final   :: Spec
+    }
 
 instance Show Top where
   show (Top domains systems rules) =
@@ -26,17 +28,19 @@ instance Show Top where
     where
       lines = concat
         [ map show domains
+        , [""]
         , map show systems
+        , [""]
         , map show rules
         ]
 
 instance Show Domain where
   show Domain {domain, variable, spec} =
-    variable ++ " ∈ " ++ domain ++ " : " ++ show spec
+    unwords ["domain", variable, "in", domain, ":", show spec]
 
 instance Show System where
   show System {arrow, initial, final} =
-    arrow ++ " = " ++ show initial ++ " × " ++ show final
+    unwords ["system", show initial, arrow, show final]
 
 data Spec
   = Integer
@@ -53,8 +57,8 @@ instance Show Spec where
   show Identifier    = "Identifier"
   show SSyntax       = "Syntax"
   show (Custom name) = name
-  show (Cross xs)   = intercalate " * " (fmap show xs)
-  show (Union xs)   = intercalate " | " (fmap show xs)
+  show (Cross xs)    = intercalate " * " (fmap show xs)
+  show (Union xs)    = intercalate " | " (fmap show xs)
 
 data Rule
   = Rule
@@ -68,12 +72,15 @@ instance Show Rule where
   show Rule {name, base, premises, properties} =
     intercalate "\n" lines
     where
+      premisesStrs = map show premises
+      baseStr = show base
+      sepLength = maximum (map length (baseStr : premisesStrs))
       lines = concat
         [ map show properties
         , [name ++ ":" ]
-        , map show premises
-        , ["------"]
-        , [show base]
+        , premisesStrs
+        , [replicate sepLength '-']
+        , [baseStr]
         ]
 
 data Property = NonDeterministic | NonTerminating
@@ -101,7 +108,7 @@ data Conf
 instance Show Conf where
   show (Syntax s)   = "\"" ++ s ++ "\""
   show (Variable x) = x
-  show (Tup xs)     = "<" ++ intercalate ", " (fmap show xs) ++ ">"
+  show (Tup xs)     = "<" ++ unwords (fmap show xs) ++ ">"
 
 data Premise
   = TPremise Trans
