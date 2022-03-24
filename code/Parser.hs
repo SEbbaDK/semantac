@@ -22,11 +22,6 @@ ws =
     (L.skipLineComment "#")
     (L.skipBlockComment "#*" "*#")
 
-premiseSeparator :: Parser ()
-premiseSeparator = label "premise separator" $ do
-  try (string "   ") <|> string "\n"
-  ws
-
 varNameParser :: Parser String
 varNameParser = do
   start <- some alphaNumChar
@@ -135,7 +130,7 @@ propertyParser =
       terminating = value (string "non-terminating") NonTerminating
 
 confPartParser =
-  elemParser `sepBy` ws >>= \e -> return $ Tup e
+  elemParser `sepBy` ws >>= \e -> return $ SupTup e
 
 confParser :: Parser Conf
 confParser =
@@ -182,15 +177,10 @@ eqParser = do
   return $ eq left right
 
 premiseParser :: Parser Premise
-premiseParser = try (
-  do
-    t <- transParser
-    return $ TPremise t
-  ) <|> (
-  do
-    eq <- eqParser
-    return $ TEquality eq
-  )
+premiseParser = do
+  p <- fmap TPremise transParser <|> fmap TEquality eqParser
+  ws
+  return p
 
 ruleParser :: Parser Rule
 ruleParser = do
@@ -200,7 +190,7 @@ ruleParser = do
   ws
   name <- domainNameParser
   ws
-  premises <- premiseParser `sepBy` premiseSeparator
+  premises <- many premiseParser
   ws
   ruleSepParser
   base <- transParser

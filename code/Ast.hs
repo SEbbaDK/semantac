@@ -104,11 +104,13 @@ data Conf
   = Syntax String
   | Variable String
   | Tup [Conf]
+  | SupTup [Conf]
 
 instance Show Conf where
   show (Syntax s)   = "\"" ++ s ++ "\""
   show (Variable x) = x
   show (Tup xs)     = "<" ++ unwords (fmap show xs) ++ ">"
+  show (SupTup xs)  = unwords (fmap show xs)
 
 data Premise
   = TPremise Trans
