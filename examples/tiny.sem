@@ -8,6 +8,7 @@ non-terminating
 rule Add
 <e1> =>e <i1>
 <e2> =>e <i2>
+[i == +int i1 i2]
 ----------------
 <e1 "+" e2> =>e <i>
 

@@ -153,9 +153,44 @@ transParser = do
   after <- confParser
   return $ Trans {system, before, after}
 
+exprVarParser :: Parser Expr
+exprVarParser = do
+  s <- some alphaNumChar
+  return $ EVar s
+
+exprCallParser :: Parser Expr
+exprCallParser = do
+  name <- (do string "+"; n <- some lowerChar; return ("+" ++ n))
+  ws
+  params <- exprVarParser `sepBy` (some $ string " ")
+  return $ EOp name params
+
+exprParser :: Parser Expr
+exprParser = try (exprVarParser) <|> exprCallParser
+
+eqParser :: Parser Equality
+eqParser = do
+  try $ string "["
+  ws
+  left <- exprParser
+  ws
+  eq <- try (value (string "==") Eq) <|> (value (string "!=") InEq)
+  ws
+  right <- exprParser
+  ws
+  string "]"
+  return $ eq left right
+
 premiseParser :: Parser Premise
--- Add premise equality
-premiseParser = try (TPremise <$> transParser) <|> return (TEquality $ Eq (EVar "x") (EVar "x"))
+premiseParser = try (
+  do
+    t <- transParser
+    return $ TPremise t
+  ) <|> (
+  do
+    eq <- eqParser
+    return $ TEquality eq
+  )
 
 ruleParser :: Parser Rule
 ruleParser = do
@@ -166,6 +201,7 @@ ruleParser = do
   name <- domainNameParser
   ws
   premises <- premiseParser `sepBy` premiseSeparator
+  ws
   ruleSepParser
   base <- transParser
   return $ Rule {name, base, premises, properties}
