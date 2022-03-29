@@ -1,12 +1,10 @@
 {-# LANGUAGE NamedFieldPuns #-}
 
-import           Data.Bifunctor        (second)
-import           Data.Either           (rights)
 import           Data.Semigroup        ((<>))
 import           Options.Applicative
 import           Parser                (doParse)
 import           Text.Megaparsec.Error (errorBundlePretty)
-import           Typer                 (CheckResult (Ok), check)
+import           TypeChecker           (check)
 
 data Args
   = Args
@@ -32,8 +30,8 @@ cli Args {file, latex = False} = do
     Right ast -> do
       print ast
       putStrLn "\n"
-      case check ast of
-        Ok  -> putStrLn "Checks passed"
-        err -> putStrLn $ "Error: " ++ show err
+      case check ast  of
+        Right _  -> putStrLn "Checks passed"
+        Left err -> putStrLn $ "Error: " ++ show err
 cli Args {file, latex = True} = do
   putStrLn "latex mode"

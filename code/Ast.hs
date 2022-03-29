@@ -79,7 +79,7 @@ instance Show Rule where
         [ map show properties
         , [name ++ ":" ]
         , premisesStrs
-        , [replicate sepLength '-']
+        , [replicate sepLength '-' | not (null premises)]
         , [baseStr]
         ]
 

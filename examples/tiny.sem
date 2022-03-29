@@ -1,7 +1,7 @@
 domain e in Exp : Identifier
-domain i in Int : Integer 
+domain i in Int : Integer
 
-system Exp =>e Int
+system <<Exp>> =>e <<Int>>
 
 non-deterministic
 non-terminating

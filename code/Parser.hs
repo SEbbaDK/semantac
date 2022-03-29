@@ -40,18 +40,19 @@ systemNameChars = "-=~|>#abcdefghjklmnop"
 systemNameParser :: Parser String
 systemNameParser = many (oneOf systemNameChars)
 
+systemParser :: Parser System
 systemParser = do
   try (string "system")
   ws
-  initial <- try domainNameParser
+  initial <- specParser
   ws
-  system <- try systemNameParser
+  system <- systemNameParser
   ws
-  final <- try domainNameParser
+  final <- specParser
   return $ System
     { arrow = system
-    , initial = Custom initial
-    , final = Custom final
+    , initial = initial
+    , final = final
     }
 
 value :: Parser a -> b -> Parser b
@@ -73,22 +74,20 @@ betweenCharEscaped delimiter = do
   char delimiter
   return res
 
-baseTypeParser :: Parser Spec
-baseTypeParser =
-  value (string "Integer") Integer
-    <|> value (string "Identifier") Identifier
-
-operSpecParser :: ([Spec] -> Spec) -> Parser a -> Parser Spec
-operSpecParser opCon op = do
-  let sep = try (ws >> op >> ws)
-  xs <- sepBy (try baseTypeParser) sep
-  return $ opCon xs
+subSpecParser :: Parser a -> Parser [Spec]
+subSpecParser op = do
+  try (string "<")
+  xs <- sepBy specParser (try (ws >> op >> ws))
+  string ">"
+  return xs
 
 specParser :: Parser Spec
 specParser =
-  try baseTypeParser
-  <|> try (operSpecParser Union (string "U"))
-  <|> try (operSpecParser Cross (string "×"))
+  try (value (string "Integer") Integer)
+  <|> try (value (string "Identifier") Identifier)
+  <|> try (Custom <$> domainNameParser)
+  <|> try (Cross <$> subSpecParser (string "*"))
+  <|> try (Union <$> subSpecParser (string "|"))
 
 domainVariableBaseParser = some lowerChar
 
@@ -205,7 +204,7 @@ topParser =
   where
     topParser_ :: Top -> Parser Top
     topParser_ (Top domains systems rules) =
-      value (ws >> eof) (Top domains systems rules)
+      value (ws >> eof) (Top (reverse domains) (reverse systems) (reverse rules))
         <|> try ( do
                 ws
                 d <- domainParser
