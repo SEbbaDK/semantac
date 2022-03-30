@@ -133,6 +133,7 @@ fromSpec SSyntax    = TSyntax
 fromSpec (Custom x) = TCustom x
 fromSpec (Cross xs) = TCross (fmap fromSpec xs)
 fromSpec (Union xs) = TUnion (fmap fromSpec xs)
+fromSpec (Func _ _) = error "todo"
 
 type Substitutions = Map TypeVar Type
 
