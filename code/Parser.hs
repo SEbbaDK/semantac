@@ -74,20 +74,25 @@ betweenCharEscaped delimiter = do
   char delimiter
   return res
 
-subSpecParser :: Parser a -> Parser [Spec]
-subSpecParser op = do
-  try (string "<")
-  xs <- sepBy specParser (try (ws >> op >> ws))
-  string ">"
-  return xs
+baseTypeParser :: Parser Spec
+baseTypeParser =
+  value (string "Integer") Integer
+    <|> value (string "Identifier") Identifier
+    <|> value (string "Syntax") SSyntax
+    <|> (do name <- domainNameParser ; return $ Custom name)
+
+operSpecParser :: ([Spec] -> Spec) -> Parser a -> Parser Spec
+operSpecParser opCon op = do
+  let sep = try (ws >> op >> ws)
+  xs <- (try baseTypeParser) `sepBy` sep
+  return $ opCon xs
 
 specParser :: Parser Spec
 specParser =
-  try (value (string "Integer") Integer)
-  <|> try (value (string "Identifier") Identifier)
-  <|> try (Custom <$> domainNameParser)
-  <|> try (Cross <$> subSpecParser (string "*"))
-  <|> try (Union <$> subSpecParser (string "|"))
+  try baseTypeParser
+  <|> try (operSpecParser Union (string "U"))
+  <|> try (operSpecParser Cross (string "x"))
+  <|> try (do a <- baseTypeParser; ws >> (string "->") >> ws; b <- baseTypeParser; return $ Func a b)
 
 domainVariableBaseParser = some lowerChar
 

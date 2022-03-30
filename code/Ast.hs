@@ -49,6 +49,7 @@ data Spec
   | Custom String
   | Cross [Spec]
   | Union [Spec]
+  | Func Spec Spec
 
 deriving instance Eq Spec
 
@@ -59,6 +60,7 @@ instance Show Spec where
   show (Custom name) = name
   show (Cross xs)    = intercalate " * " (fmap show xs)
   show (Union xs)    = intercalate " | " (fmap show xs)
+  show (Func a b)    = (show a) ++ " → " ++ (show b)
 
 data Rule
   = Rule
