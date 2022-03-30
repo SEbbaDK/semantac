@@ -1,4 +1,4 @@
-domain e in Exp : Identifier
+domain e in Exp : Syntax
 domain i in Int : Integer
 
 system Exp =>e Int
