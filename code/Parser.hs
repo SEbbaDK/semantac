@@ -90,8 +90,8 @@ operSpecParser opCon op = do
 specParser :: Parser Spec
 specParser =
   try baseTypeParser
-  <|> try (operSpecParser Union (string "U"))
-  <|> try (operSpecParser Cross (string "x"))
+  <|> try (operSpecParser Union (string "U" <|> string "∪"))
+  <|> try (operSpecParser Cross (string "x" <|> string "×" <|> string "⨯"))
   <|> try (do a <- baseTypeParser; ws >> (string "->") >> ws; b <- baseTypeParser; return $ Func a b)
 
 domainVariableBaseParser = some lowerChar
