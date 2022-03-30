@@ -1,5 +1,5 @@
-domain e in Exp : Syntax
-domain i in Int : Integer
+category e in Exp : Syntax
+category i in Int : Integer
 
 system Exp =>e Int
 
