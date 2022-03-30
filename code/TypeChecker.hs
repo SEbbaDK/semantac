@@ -247,8 +247,8 @@ unifyCross ((t1_, t2_) : ts_) results = do
 infer :: Conf -> State TypeEnv Type
 infer (Syntax _) =
     return TSyntax
-infer (Variable x) = do
-    maybeT <- lookupBind (take 1 x)
+infer (Variable x n m) = do
+    maybeT <- lookupBind (show $ Variable x n m)
     case maybeT of
         Just t -> return t
         Nothing -> do

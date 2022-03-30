@@ -12,7 +12,6 @@ import           Data.Void                  (Void)
 import           Text.Megaparsec
 import           Text.Megaparsec.Char
 import qualified Text.Megaparsec.Char.Lexer as L
-import Debug.Trace (trace)
 
 type Parser = Parsec Void Text
 
@@ -23,11 +22,12 @@ ws =
     (L.skipLineComment "#")
     (L.skipBlockComment "#*" "*#")
 
-varNameParser :: Parser String
+varNameParser :: Parser (String, String, Int)
 varNameParser = do
-  start <- some alphaNumChar
-  end <- try (fmap unpack (string "'")) <|> return ""
-  return $ start ++ end
+  base <- some alphaNumChar
+  name <- option "" $ char '_' >> some alphaNumChar
+  marks <- fmap length $ many (char '\'')
+  return (base, name, marks)
 
 categoryNameParser :: Parser String
 categoryNameParser = do
@@ -120,16 +120,7 @@ categoryParser = do
   ws
   spec <- specParser
   ws
-  return $ (trace (show spec) $ Category { category = name, variable, spec })
-
-elemParser :: Parser Conf
-elemParser = try elemSyntaxParser <|> elemVarParser
-  where
-    elemSyntaxParser :: Parser Conf
-    elemSyntaxParser = fmap Syntax (betweenCharEscaped '"')
-
-    elemVarParser :: Parser Conf
-    elemVarParser = fmap Variable varNameParser
+  return $ Category { category = name, variable, spec }
 
 comma :: Parser ()
 comma = do
@@ -144,6 +135,15 @@ propertyParser =
       deterministic = value (string "non-deterministic") NonDeterministic
       terminating = value (string "non-terminating") NonTerminating
 
+elemParser :: Parser Conf
+elemParser = try elemSyntaxParser <|> elemVarParser
+  where
+    elemSyntaxParser :: Parser Conf
+    elemSyntaxParser = fmap Syntax (betweenCharEscaped '"')
+
+    elemVarParser :: Parser Conf
+    elemVarParser = fmap (\(x,s,m) -> Variable x s m) varNameParser
+
 confPartParser =
   elemParser `sepBy` ws >>= \e -> return $ SupTup e
 
@@ -153,6 +153,7 @@ confParser =
     "<"
     (fmap Tup (confPartParser `sepBy` comma))
     ">"
+      where
 
 transParser :: Parser Trans
 transParser = do

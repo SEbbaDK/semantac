@@ -104,13 +104,17 @@ instance Show Trans where
 
 data Conf
   = Syntax String
-  | Variable String
+  | Variable String String Int -- base subscript marks
   | Tup [Conf]
   | SupTup [Conf]
 
 instance Show Conf where
   show (Syntax s)   = "\"" ++ s ++ "\""
-  show (Variable x) = x
+  show (Variable x s m) = concat
+    [ x
+    , if s == "" then "" else "_" ++ s
+    , replicate m '\''
+    ]
   show (Tup xs)     = "<" ++ unwords (fmap show xs) ++ ">"
   show (SupTup xs)  = unwords (fmap show xs)
 

@@ -7,7 +7,7 @@ category env in Env = (Id) -> (Int)
 system Syntax x Env =>e Int x Env
 
 rule Assign
-       <e, env> =>e <i, env'>
+      <e, env> =>e <i, env'>
 --------------------------------------
-<x "=" e1, env> =>e <i, env'[x |-> i]>
+<x "=" e, env> =>e <i, env'[x |-> i]>
 
