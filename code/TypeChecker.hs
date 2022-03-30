@@ -48,7 +48,7 @@ check (Top domains systems rules) =
     in
     foldl f init rules
 
-checkRule :: [Domain] -> [System] -> Rule -> CheckResult
+checkRule :: [Category] -> [System] -> Rule -> CheckResult
 checkRule domains systems Rule {base, premises, properties} =
     let
         tEnv = newTypeEnv domains systems
@@ -151,11 +151,11 @@ data TypeEnv
     { nextTypeVar_ :: TypeVar
     , subs         :: Substitutions
     , bindings     :: Map String Type
-    , domains      :: [Domain]
+    , domains      :: [Category]
     , systems      :: [System]
     }
 
-newTypeEnv :: [Domain] -> [System] -> TypeEnv
+newTypeEnv :: [Category] -> [System] -> TypeEnv
 newTypeEnv domains systems = TypeEnv
     { nextTypeVar_ = TypeVar 1
     , subs = mempty

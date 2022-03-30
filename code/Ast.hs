@@ -6,11 +6,11 @@ module Ast where
 import           Data.List (intercalate, intersperse)
 
 data Top
-  = Top [Domain] [System] [Rule]
+  = Top [Category] [System] [Rule]
 
-data Domain
-  = Domain
-    { domain   :: String
+data Category
+  = Category
+    { category :: String
     , variable :: String
     , spec     :: Spec
     }
@@ -23,20 +23,20 @@ data System
     }
 
 instance Show Top where
-  show (Top domains systems rules) =
+  show (Top categorys systems rules) =
     intercalate "\n" lines
     where
       lines = concat
-        [ map show domains
+        [ map show categorys
         , [""]
         , map show systems
         , [""]
         , intersperse "" (map show rules)
         ]
 
-instance Show Domain where
-  show Domain {domain, variable, spec} =
-    unwords ["domain", variable, "in", domain, ":", show spec]
+instance Show Category where
+  show Category {category, variable, spec} =
+    unwords ["category", variable, "in", category, ":", show spec]
 
 instance Show System where
   show System {arrow, initial, final} =

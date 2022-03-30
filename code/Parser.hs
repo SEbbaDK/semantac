@@ -12,6 +12,7 @@ import           Data.Void                  (Void)
 import           Text.Megaparsec
 import           Text.Megaparsec.Char
 import qualified Text.Megaparsec.Char.Lexer as L
+import Debug.Trace (trace)
 
 type Parser = Parsec Void Text
 
@@ -28,8 +29,8 @@ varNameParser = do
   end <- try (fmap unpack (string "'")) <|> return ""
   return $ start ++ end
 
-domainNameParser :: Parser String
-domainNameParser = do
+categoryNameParser :: Parser String
+categoryNameParser = do
   c <- try upperChar
   rest <- many letterChar
   return $ c : rest
@@ -74,42 +75,52 @@ betweenCharEscaped delimiter = do
   char delimiter
   return res
 
-baseTypeParser :: Parser Spec
-baseTypeParser =
-  value (string "Integer") Integer
-    <|> value (string "Identifier") Identifier
-    <|> value (string "Syntax") SSyntax
-    <|> (do name <- domainNameParser ; return $ Custom name)
-
 operSpecParser :: ([Spec] -> Spec) -> Parser a -> Parser Spec
 operSpecParser opCon op = do
   let sep = try (ws >> op >> ws)
-  xs <- (try baseTypeParser) `sepBy` sep
+  xs <- (try baseSpecParser) `sepBy` sep
   return $ opCon xs
 
+baseSpecParser :: Parser Spec
+baseSpecParser =
+  (between (string "(" >> ws) (ws >> ")" >> ws) specParser)
+    <|> value (string "Integer") Integer
+    <|> value (string "Identifier") Identifier
+    <|> value (string "Syntax") SSyntax
+    <|> fmap Custom categoryNameParser
+
 specParser :: Parser Spec
-specParser =
-  try baseTypeParser
-  <|> try (operSpecParser Union (string "U" <|> string "∪"))
-  <|> try (operSpecParser Cross (string "x" <|> string "×" <|> string "⨯"))
-  <|> try (do a <- baseTypeParser; ws >> (string "->") >> ws; b <- baseTypeParser; return $ Func a b)
-
-domainVariableBaseParser = some lowerChar
-
-domainParser :: Parser Domain
-domainParser = do
-  try (string "domain")
+specParser = let
+  biToArray f l r = f [l,r]
+  unionParse = value (string "U" <|> string "∪") (Just $ biToArray Union)
+  crossParse = value (string "x" <|> string "×" <|> string "⨯") (Just $ biToArray Cross)
+  funcParse = value (string "->") (Just $ Func)
+ in do
+  l <- baseSpecParser
   ws
-  variable <- domainVariableBaseParser
+  o <- try unionParse <|> try crossParse <|> try funcParse <|> return Nothing
+  ws
+  case o of
+    Nothing -> return l
+    Just f -> fmap (f l) baseSpecParser
+
+categoryVariableBaseParser = some lowerChar
+
+categoryParser :: Parser Category
+categoryParser = do
+  try (string "category")
+  ws
+  variable <- categoryVariableBaseParser
   ws
   string "∈" <|> string "in"
   ws
-  name <- domainNameParser
+  name <- categoryNameParser
   ws
-  char ':'
+  char '='
   ws
   spec <- specParser
-  return Domain { domain = name, variable, spec }
+  ws
+  return $ (trace (show spec) $ Category { category = name, variable, spec })
 
 elemParser :: Parser Conf
 elemParser = try elemSyntaxParser <|> elemVarParser
@@ -192,7 +203,7 @@ ruleParser = do
   ws
   string "rule"
   ws
-  name <- domainNameParser
+  name <- categoryNameParser
   ws
   premises <- many premiseParser
   ws
@@ -208,22 +219,19 @@ topParser =
   topParser_ (Top [] [] [])
   where
     topParser_ :: Top -> Parser Top
-    topParser_ (Top domains systems rules) =
-      value (ws >> eof) (Top (reverse domains) (reverse systems) (reverse rules))
+    topParser_ (Top categories systems rules) = ws >>
+      value eof (Top (reverse categories) (reverse systems) (reverse rules))
         <|> try ( do
-                ws
-                d <- domainParser
-                topParser_ $ Top (d : domains) systems rules
+                c <- categoryParser
+                topParser_ $ Top (c : categories) systems rules
             )
         <|> try ( do
-                ws
                 s <- systemParser
-                topParser_ $ Top domains (s : systems) rules
+                topParser_ $ Top categories (s : systems) rules
             )
         <|> try ( do
-                ws
                 r <- ruleParser
-                topParser_ $ Top domains systems (r : rules)
+                topParser_ $ Top categories systems (r : rules)
             )
 
 doParse :: String -> String -> Either (ParseErrorBundle Text Void) Top
