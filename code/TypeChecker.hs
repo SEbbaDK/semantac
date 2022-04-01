@@ -244,8 +244,11 @@ unifyCross ((t1_, t2_) : ts_) results = do
         Right t -> unifyCross ts_ (t : results)
         Left e  -> return (Left e)
 
-
 infer :: Conf -> State TypeEnv Type
+infer (Conf xs) =
+    TCross <$> mapM infer xs
+infer (Paren e) =
+    infer e
 infer (Syntax _) =
     return TSyntax
 infer (Variable x n m) = do
@@ -256,8 +259,6 @@ infer (Variable x n m) = do
             t <- TVar <$> nextTypeVar
             addBind x t
             return t
-infer (Tup xs) =
-    TCross <$> mapM infer xs
-infer (SupTup xs) =
+infer (SyntaxList xs) =
     TCross <$> mapM infer xs
 

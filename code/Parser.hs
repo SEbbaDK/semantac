@@ -146,23 +146,29 @@ propertyParser =
       deterministic = value (string "non-deterministic") NonDeterministic
       terminating = value (string "non-terminating") NonTerminating
 
-elemParser :: Parser Conf
-elemParser = try elemSyntaxParser <|> elemVarParser
+confElementParser :: Parser Conf
+confElementParser = do
+  let parsers = try elemSyntaxParser <|> try elemVarParser <|> elemParenParser
+  elems <- parsers `sepBy` ws
+  return $ case elems of
+    [e] -> e
+    l   -> SyntaxList l
+
   where
     elemSyntaxParser :: Parser Conf
-    elemSyntaxParser = fmap Syntax (betweenCharEscaped '"')
-
+    elemSyntaxParser = fmap Syntax $ betweenCharEscaped '"'
+  
     elemVarParser :: Parser Conf
-    elemVarParser = fmap (\(x,s,m) -> Variable x s m) varNameParser
-
-confPartParser =
-  elemParser `sepBy` ws >>= \e -> return $ SupTup e
-
+    elemVarParser    = fmap (\(x,s,m) -> Variable x s m) varNameParser
+  
+    elemParenParser :: Parser Conf
+    elemParenParser  = fmap Paren $ betweenS "(" confElementParser ")"
+  
 confParser :: Parser Conf
 confParser =
   betweenS
     "<"
-    (fmap Tup (confPartParser `sepBy` comma))
+    (fmap Conf (confElementParser `sepBy` comma))
     ">"
       where
 

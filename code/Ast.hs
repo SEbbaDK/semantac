@@ -111,20 +111,22 @@ instance Show Trans where
     show before ++ " " ++ system ++ " " ++ show after
 
 data Conf
-  = Syntax String
+  = Conf [Conf]
+  | Syntax String
   | Variable String String Int -- base subscript marks
-  | Tup [Conf]
-  | SupTup [Conf]
+  | SyntaxList [Conf]
+  | Paren Conf
 
 instance Show Conf where
-  show (Syntax s)   = "\"" ++ s ++ "\""
+  show (Conf s) = "⟨" ++ unwords (map show s) ++ "⟩"
+  show (Paren e)        = "(" ++ show e ++ ")"
+  show (SyntaxList xs)  = unwords $ fmap show xs
+  show (Syntax s)       = "\"" ++ s ++ "\""
   show (Variable x s m) = concat
     [ x
     , if s == "" then "" else "_" ++ s
     , replicate m '\''
     ]
-  show (Tup xs)     = "<" ++ unwords (fmap show xs) ++ ">"
-  show (SupTup xs)  = unwords (fmap show xs)
 
 data Premise
   = TPremise Trans
