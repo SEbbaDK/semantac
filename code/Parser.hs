@@ -12,8 +12,19 @@ import           Data.Void                  (Void)
 import           Text.Megaparsec
 import           Text.Megaparsec.Char
 import qualified Text.Megaparsec.Char.Lexer as L
+import           Text.Megaparsec.Pos        (unPos)
 
 type Parser = Parsec Void Text
+
+pos2tup (SourcePos {sourceName, sourceLine, sourceColumn}) =
+  (sourceName, unPos sourceLine, unPos sourceColumn)
+
+locced :: Parser a -> Parser (Loc a)
+locced p = do
+  start <- fmap pos2tup getSourcePos
+  result <- p
+  end <- fmap pos2tup getSourcePos
+  return $ Loc (start, end) result
 
 ws :: Parser ()
 ws =
@@ -223,15 +234,15 @@ topParser =
     topParser_ (Top categories systems rules) = ws >>
       value eof (Top (reverse categories) (reverse systems) (reverse rules))
         <|> try ( do
-                c <- categoryParser
+                c <- locced categoryParser
                 topParser_ $ Top (c : categories) systems rules
             )
         <|> try ( do
-                s <- systemParser
+                s <- locced systemParser
                 topParser_ $ Top categories (s : systems) rules
             )
         <|> try ( do
-                r <- ruleParser
+                r <- locced ruleParser
                 topParser_ $ Top categories systems (r : rules)
             )
 

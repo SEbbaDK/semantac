@@ -5,8 +5,16 @@ module Ast where
 
 import           Data.List (intercalate, intersperse)
 
+type PosCoord = (String, Int, Int)
+type Pos = (PosCoord, PosCoord)
+data Loc a = Loc Pos a
+unLoc (Loc _ a) = a
+
+instance (Show a) => Show (Loc a) where
+  show (Loc _ a) = show a
+
 data Top
-  = Top [Category] [System] [Rule]
+  = Top [Loc Category] [Loc System] [Loc Rule]
 
 data Category
   = Category
@@ -60,7 +68,7 @@ instance Show Spec where
   show (Custom name) = name
   show (Cross xs)    = intercalate " * " (fmap show xs)
   show (Union xs)    = intercalate " | " (fmap show xs)
-  show (Func a b)    = (show a) ++ " → " ++ (show b)
+  show (Func a b)    = show a ++ " → " ++ show b
 
 data Rule
   = Rule

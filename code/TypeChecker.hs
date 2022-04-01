@@ -42,14 +42,14 @@ check (Top domains systems rules) =
     let
         init = Right ()
 
-        f :: CheckResult -> Rule -> CheckResult
+        f :: CheckResult -> Loc Rule -> CheckResult
         f (Right ()) rule = checkRule domains systems rule
         f (Left e) rule   = Left e
     in
     foldl f init rules
 
-checkRule :: [Category] -> [System] -> Rule -> CheckResult
-checkRule domains systems Rule {base, premises, properties} =
+checkRule :: [Loc Category] -> [Loc System] -> Loc Rule -> CheckResult
+checkRule domains systems (Loc _ (Rule {base, premises, properties})) =
     let
         tEnv = newTypeEnv domains systems
 
@@ -75,8 +75,8 @@ checkPremiseSystems (TEquality eq) =
     return (trace "todo: eq" (Right ()))
 
 -- Transition matches system
-checkTransSystem :: System -> Trans -> State TypeEnv UnifyResult
-checkTransSystem System { arrow, initial, final } Trans { system, before, after } = do
+checkTransSystem :: Loc System -> Trans -> State TypeEnv UnifyResult
+checkTransSystem (Loc _ (System { arrow, initial, final })) Trans { system, before, after } = do
     t1 <- matches before initial
     case t1 of
         Left e -> return (Left e)
@@ -152,11 +152,11 @@ data TypeEnv
     { nextTypeVar_ :: TypeVar
     , subs         :: Substitutions
     , bindings     :: Map String Type
-    , domains      :: [Category]
-    , systems      :: [System]
+    , domains      :: [Loc Category]
+    , systems      :: [Loc System]
     }
 
-newTypeEnv :: [Category] -> [System] -> TypeEnv
+newTypeEnv :: [Loc Category] -> [Loc System] -> TypeEnv
 newTypeEnv domains systems = TypeEnv
     { nextTypeVar_ = TypeVar 1
     , subs = mempty
@@ -165,10 +165,10 @@ newTypeEnv domains systems = TypeEnv
     , systems
     }
 
-getSystem :: String -> State TypeEnv (Maybe System)
+getSystem :: String -> State TypeEnv (Maybe (Loc System))
 getSystem systemArrow = do
     TypeEnv { systems } <- get
-    case filter (\System {arrow } -> arrow == systemArrow) systems of
+    case filter (\(Loc _ (System { arrow })) -> arrow == systemArrow) systems of
         []      -> return Nothing
         sys : _ -> return (Just sys)
 
