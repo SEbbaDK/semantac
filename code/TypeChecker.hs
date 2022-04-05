@@ -115,6 +115,7 @@ data Type
   | TCross [Type]
   | TUnion [Type]
   | TVar TypeVar
+  | TFunc Type Type
   deriving (Eq, Ord)
 
 instance Show Type where
@@ -133,7 +134,7 @@ fromSpec SSyntax    = TSyntax
 fromSpec (Custom x) = TCustom x
 fromSpec (Cross xs) = TCross (fmap fromSpec xs)
 fromSpec (Union xs) = TUnion (fmap fromSpec xs)
-fromSpec (Func _ _) = error "todo"
+fromSpec (Func a b) = TFunc (fromSpec a) (fromSpec b)
 
 type Substitutions = Map TypeVar Type
 
@@ -145,6 +146,7 @@ subst subs (TCustom x) = TCustom x
 subst subs (TCross xs) = TCross (fmap (subst subs) xs)
 subst subs (TUnion xs) = TUnion (fmap (subst subs) xs)
 subst subs (TVar tv)   = fromMaybe (TVar tv) (Map.lookup tv subs)
+subst subs (TFunc a b) = TFunc (subst subs a) (subst subs b)
 
 
 data TypeEnv
@@ -207,6 +209,7 @@ freeTypeVars (TCustom name) = []
 freeTypeVars (TCross xs)    = concatMap freeTypeVars xs
 freeTypeVars (TUnion xs)    = concatMap freeTypeVars xs
 freeTypeVars (TVar v)       = [v]
+freeTypeVars (TFunc a b)    = freeTypeVars a ++ freeTypeVars b
 
 varBind :: TypeVar -> Type -> State TypeEnv UnifyResult
 varBind tv t =
@@ -232,6 +235,10 @@ unify (TVar tv) t =
     varBind tv t
 unify (TCross t1) (TCross t2) | length t1 == length t2  =
     unifyCross (zip t1 t2) []
+    -- TODO: Shouldn't there be a unify TUnion?
+unify (TFunc a1 b1) (TFunc a2 b2) | a1 == a2 && b1 == b2 =
+    -- TODO: Finish the TFunc unification
+    error "todo"
 unify t1 t2 =
     return (Left (Mismatch t1 t2))
 
@@ -251,8 +258,10 @@ infer (Paren e) =
     infer e
 infer (Syntax _) =
     return TSyntax
-infer (Variable x n m) = do
-    maybeT <- lookupBind (show $ Variable x n m)
+infer (Var (Variable x n m _)) = do
+    -- TODO: This should make the inferred variable need to be a
+    --       function if there is bindings
+    maybeT <- lookupBind (x ++ "_" ++ n ++ replicate m '\'')
     case maybeT of
         Just t -> return t
         Nothing -> do

@@ -87,10 +87,10 @@ instance Show Rule where
       sepLength = maximum (map length (baseStr : premisesStrs))
       lines = concat
         [ map show properties
-        , [name ++ ":" ]
+        , [ name ++ ":" ]
         , premisesStrs
-        , [replicate sepLength '-' | not (null premises)]
-        , [baseStr]
+        , [ replicate sepLength '-' | not (null premises) ]
+        , [ baseStr ]
         ]
 
 data Property = NonDeterministic | NonTerminating
@@ -107,26 +107,38 @@ data Trans
     }
 
 instance Show Trans where
-  show Trans {system, before, after} =
+  show Trans { system, before, after } =
     show before ++ " " ++ system ++ " " ++ show after
+
+data Variable
+  = Variable
+    { typename :: String
+    , varname  :: String
+    , marks    :: Int
+    , binds    :: [(Variable, Variable)]
+    }
+
+instance Show Variable where
+  show Variable { typename, varname, marks, binds } = concat
+    [ typename
+    , if varname == "" then "" else "_" ++ varname
+    , replicate marks '\''
+    , concat $ map (\(var, val) -> "[" ++ show var ++ "↦" ++ show val ++ "]") binds
+    ]
 
 data Conf
   = Conf [Conf]
   | Syntax String
-  | Variable String String Int -- base subscript marks
+  | Var Variable
   | SyntaxList [Conf]
   | Paren Conf
 
 instance Show Conf where
-  show (Conf s) = "⟨" ++ unwords (map show s) ++ "⟩"
-  show (Paren e)        = "(" ++ show e ++ ")"
-  show (SyntaxList xs)  = unwords $ fmap show xs
-  show (Syntax s)       = "\"" ++ s ++ "\""
-  show (Variable x s m) = concat
-    [ x
-    , if s == "" then "" else "_" ++ s
-    , replicate m '\''
-    ]
+  show (Conf s)        = "⟨" ++ intercalate ", " (map show s) ++ "⟩"
+  show (Paren e)       = "(" ++ show e ++ ")"
+  show (SyntaxList xs) = unwords $ fmap show xs
+  show (Syntax s)      = "\"" ++ s ++ "\""
+  show (Var v)         = show v
 
 data Premise
   = TPremise Trans

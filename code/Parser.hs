@@ -33,13 +33,6 @@ ws =
     (L.skipLineComment "#")
     (L.skipBlockComment "#*" "*#")
 
-varNameParser :: Parser (String, String, Int)
-varNameParser = do
-  base <- some alphaNumChar
-  name <- option "" $ char '_' >> some alphaNumChar
-  marks <- fmap length $ many (char '\'')
-  return (base, name, marks)
-
 categoryNameParser :: Parser String
 categoryNameParser = do
   c <- try upperChar
@@ -146,6 +139,25 @@ propertyParser =
       deterministic = value (string "non-deterministic") NonDeterministic
       terminating = value (string "non-terminating") NonTerminating
 
+bindingParser = do
+  char '['
+  var <- variableParser
+  ws
+  string "|->" <|> string "↦"
+  ws
+  val <- variableParser
+  ws
+  char ']'
+  return ( var, val )
+
+variableParser :: Parser Variable
+variableParser = do
+  base <- some alphaNumChar
+  name <- option "" $ char '_' >> some alphaNumChar
+  marks <- fmap length $ many (char '\'')
+  binds <- many bindingParser
+  return $ Variable base name marks binds
+
 confElementParser :: Parser Conf
 confElementParser = do
   let parsers = try elemSyntaxParser <|> try elemVarParser <|> elemParenParser
@@ -159,7 +171,7 @@ confElementParser = do
     elemSyntaxParser = fmap Syntax $ betweenCharEscaped '"'
   
     elemVarParser :: Parser Conf
-    elemVarParser    = fmap (\(x,s,m) -> Variable x s m) varNameParser
+    elemVarParser    = fmap Var variableParser
   
     elemParenParser :: Parser Conf
     elemParenParser  = fmap Paren $ betweenS "(" confElementParser ")"
