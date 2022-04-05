@@ -1,16 +1,20 @@
 {-# LANGUAGE NamedFieldPuns #-}
 {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 {-# HLINT ignore "Avoid lambda using `infix`" #-}
+{-# LANGUAGE LambdaCase     #-}
 
 module TypeChecker where
 
 import           Ast
+import           Control.Arrow       (left)
 import           Control.Monad       (foldM, void)
 import           Control.Monad.State (MonadState (get, put), State, evalState)
 import           Data.List           as List (intercalate)
 import           Data.Map.Strict     as Map (Map, insert, lookup)
 import           Data.Maybe          (fromMaybe)
 import           Debug.Trace         (trace)
+import           Errors
+import           Types
 
 {-
 What can we check?
@@ -20,166 +24,86 @@ What can we check?
 - Syntax nodes must be consistent with the grammar.
 -}
 
+type TopResult = Either TopError ()
 
-type CheckResult = Either UnifyError ()
-type UnifyResult = Either UnifyError Type
-
--- How do we add context to the errors?
-data UnifyError
-  = Mismatch Type Type
-  | UndefinedVar String
-  | UndefinedArrow String
-  | InfiniteType TypeVar Type
-
-instance Show UnifyError where
-    show (Mismatch t1 t2) = "Type mismatch. Expected " ++ show t2 ++ " but found " ++ show t1
-    show (UndefinedVar name) = "Unbound variable \"" ++ name ++ "\""
-    show (UndefinedArrow name) = "Unbound arrow \"" ++ name ++ "\""
-    show (InfiniteType tv t) = "Infinite type. " ++ show (TVar tv) ++ " = " ++ show t
-
-check :: Top -> CheckResult
+check :: Top -> TopResult
 check (Top domains systems rules) =
     let
         init = Right ()
 
-        f :: CheckResult -> Loc Rule -> CheckResult
-        f (Right ()) rule = checkRule domains systems rule
+        f :: TopResult -> Loc Rule -> TopResult
+        f (Right ()) rule =
+            left (RuleError ruleName) (checkRule domains systems rule)
+            where Rule { name = ruleName } = unLoc rule
         f (Left e) rule   = Left e
     in
     foldl f init rules
 
-checkRule :: [Loc Category] -> [Loc System] -> Loc Rule -> CheckResult
-checkRule domains systems (Loc _ (Rule {base, premises, properties})) =
+type RuleResult = Either RuleError ()
+
+checkRule :: [Loc Category] -> [Loc System] -> Loc Rule -> RuleResult
+checkRule domains systems (Loc _ Rule {base, premises, properties}) =
     let
         tEnv = newTypeEnv domains systems
 
         init = Right ()
 
-        f :: CheckResult -> Premise -> State TypeEnv CheckResult
-        f (Right ()) prem = checkPremiseSystems prem
-        f (Left e) prem   = return (Left e)
+        f :: RuleResult -> Premise -> State TypeEnv RuleResult
+        f (Right ()) prem = do
+            tmp <- checkPremiseSystems prem
+            return $ left (\case Left e -> toRuleError e ; Right e -> PremiseError e) tmp
+        f l _ = return l
     in
     evalState (foldM f init premises) tEnv
 
+type PremiseResult = Either (Either UnifyError PremiseError) ()
+
 -- Premise matches system
-checkPremiseSystems :: Premise -> State TypeEnv CheckResult
+checkPremiseSystems :: Premise -> State TypeEnv PremiseResult
 checkPremiseSystems (TPremise trans) = do
     let Trans { system } = trans
     sys <- getSystem system
     case sys of
-        Nothing  -> return (Left (UndefinedArrow system))
-        Just sys -> do
-            res <- checkTransSystem sys trans
-            return (void res)
+        Nothing  -> return (Left (Right (TransitionError (UndefinedArrow system))))
+        Just sys -> fmap
+            (left (fmap TransitionError) . void)
+            (checkTransSystem sys trans)
 checkPremiseSystems (TEquality eq) =
     return (trace "todo: eq" (Right ()))
 
+type TransitionResult = Either (Either UnifyError TransitionError) Type
+
 -- Transition matches system
-checkTransSystem :: Loc System -> Trans -> State TypeEnv UnifyResult
-checkTransSystem (Loc _ (System { arrow, initial, final })) Trans { system, before, after } = do
-    t1 <- matches before initial
+checkTransSystem :: System -> Trans -> State TypeEnv TransitionResult
+checkTransSystem System { arrow, initial, final } Trans { system, before, after } = do
+    t1 <- infer before
+    applySubst
+    t1 <- unify t1 (fromSpec initial)
     case t1 of
-        Left e -> return (Left e)
+        Left e -> return . Left . Left $ e
         Right t1 -> do
-            t2 <- matches after final
+            t2 <- infer after
+            applySubst
+            t2 <- unify t2 (fromSpec final)
             case t2 of
-                Left e   -> return (Left e)
-                Right t2 -> unify t1 t2
+                Left e   -> return . Left . Left $ e
+                Right t2 -> do
+                    t <- unify t1 t2
+                    return $ left Left t
 
-matches :: Conf -> Spec -> State TypeEnv UnifyResult
-matches c s = do
-    t1 <- infer c
-    let t2 = fromSpec s
-    state <- get
-    unify t1 t2
-
-
-newtype TypeVar
-  = TypeVar Int
-  deriving (Eq, Ord)
-
-instance Show TypeVar where
-    show (TypeVar v) = "~" ++ reverse (intToAlphaRev v)
-        where
-            intToAlphaRev n | n <= 0 = []
-            intToAlphaRev n =
-                let (q, r) = quotRem (n - 1) 26 in
-                toEnum (fromEnum 'a' + r) : intToAlphaRev q
-
-
-data Type
-  = TInteger
-  | TIdentifier
-  | TSyntax
-  | TCustom String
-  | TCross [Type]
-  | TUnion [Type]
-  | TVar TypeVar
-  | TFunc Type Type
-  deriving (Eq, Ord)
-
-instance Show Type where
-    show TInteger       = "Int"
-    show TIdentifier    = "Id"
-    show TSyntax        = "Syntax"
-    show (TCustom name) = name
-    show (TCross xs)    = "<" ++ intercalate " , " (fmap show xs) ++ ">"
-    show (TUnion xs)    = "(" ++ intercalate " | " (fmap show xs) ++ ")"
-    show (TVar tv)      =  show tv
-
-fromSpec :: Spec -> Type
-fromSpec Integer    = TInteger
-fromSpec Identifier = TIdentifier
-fromSpec SSyntax    = TSyntax
-fromSpec (Custom x) = TCustom x
-fromSpec (Cross xs) = TCross (fmap fromSpec xs)
-fromSpec (Union xs) = TUnion (fmap fromSpec xs)
-fromSpec (Func a b) = TFunc (fromSpec a) (fromSpec b)
-
-type Substitutions = Map TypeVar Type
-
-subst :: Substitutions -> Type -> Type
-subst subs TInteger    = TInteger
-subst subs TIdentifier = TIdentifier
-subst subs TSyntax     = TSyntax
-subst subs (TCustom x) = TCustom x
-subst subs (TCross xs) = TCross (fmap (subst subs) xs)
-subst subs (TUnion xs) = TUnion (fmap (subst subs) xs)
-subst subs (TVar tv)   = fromMaybe (TVar tv) (Map.lookup tv subs)
-subst subs (TFunc a b) = TFunc (subst subs a) (subst subs b)
-
-
-data TypeEnv
-  = TypeEnv
-    { nextTypeVar_ :: TypeVar
-    , subs         :: Substitutions
-    , bindings     :: Map String Type
-    , domains      :: [Loc Category]
-    , systems      :: [Loc System]
-    }
-
-newTypeEnv :: [Loc Category] -> [Loc System] -> TypeEnv
-newTypeEnv domains systems = TypeEnv
-    { nextTypeVar_ = TypeVar 1
-    , subs = mempty
-    , bindings = mempty
-    , domains
-    , systems
-    }
-
-getSystem :: String -> State TypeEnv (Maybe (Loc System))
+getSystem :: String -> State TypeEnv (Maybe System)
 getSystem systemArrow = do
     TypeEnv { systems } <- get
-    case filter (\(Loc _ (System { arrow })) -> arrow == systemArrow) systems of
+    case filter (\(Loc _ System { arrow }) -> arrow == systemArrow) systems of
         []      -> return Nothing
-        sys : _ -> return (Just sys)
+        sys : _ -> return . Just . unLoc $ sys
 
-nextTypeVar :: State TypeEnv TypeVar
-nextTypeVar = do
+newTypeVar :: State TypeEnv TypeVar
+newTypeVar = do
     tEnv <- get
-    let TypeEnv { nextTypeVar_ = TypeVar tv } = tEnv
-    put tEnv { nextTypeVar_ = TypeVar (tv + 1) }
-    return (TypeVar tv)
+    let (tv, nTEnv) = nextTypeVar tEnv
+    put nTEnv
+    return tv
 
 
 addBind :: String -> Type -> State TypeEnv ()
@@ -211,10 +135,23 @@ freeTypeVars (TUnion xs)    = concatMap freeTypeVars xs
 freeTypeVars (TVar v)       = [v]
 freeTypeVars (TFunc a b)    = freeTypeVars a ++ freeTypeVars b
 
+
+{- This is essentially just a subset of RuleError, and maybe it should just be replaced by RuleError, but I'm keeping it until we figure out the errors properly because we might need to have slightly different types signatures -}
+data UnifyError
+  = UInfiniteType TypeVar Type
+  | UMismatch Type Type
+
+
+type UnifyResult = Either UnifyError Type
+
+toRuleError :: UnifyError -> RuleError
+toRuleError (UInfiniteType tv t) = VarInifiniteType tv t
+toRuleError (UMismatch t1 t2)    = VarTypeMismatch t1 t2
+
 varBind :: TypeVar -> Type -> State TypeEnv UnifyResult
 varBind tv t =
     if tv `elem` freeTypeVars t then
-        return (Left (InfiniteType tv t))
+        return (Left (UInfiniteType tv t))
     else do
         tEnv <- get
         let TypeEnv { subs } = tEnv
@@ -240,7 +177,7 @@ unify (TFunc a1 b1) (TFunc a2 b2) | a1 == a2 && b1 == b2 =
     -- TODO: Finish the TFunc unification
     error "todo"
 unify t1 t2 =
-    return (Left (Mismatch t1 t2))
+    return (Left (UMismatch t1 t2))
 
 unifyCross :: [(Type, Type)] -> [Type] -> State TypeEnv UnifyResult
 unifyCross [] results =
@@ -265,7 +202,7 @@ infer (Var (Variable x n m _)) = do
     case maybeT of
         Just t -> return t
         Nothing -> do
-            t <- TVar <$> nextTypeVar
+            t <- TVar <$> newTypeVar
             addBind x t
             return t
 infer (SyntaxList xs) =
