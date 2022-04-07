@@ -32,8 +32,8 @@ data CategoryError = CatError
 data SystemError = SysError
 
 data RuleError
-  = VarTypeMismatch Type Type
-  | VarInifiniteType TypeVar Type
+  = TypeMismatch Type Type
+  | InifiniteType TypeVar Type
   | UndefinedVar (Loc String)
   | UndefinedArrow String
   | ConfTypeMismatch (Loc Type) (Loc String) (Loc Type)
@@ -47,12 +47,12 @@ showSystemError :: SystemError -> String
 showSystemError _ = "todo"
 
 showRuleError :: RuleError -> Lines
-showRuleError (VarTypeMismatch t1 t2) =
+showRuleError (TypeMismatch t1 t2) =
   [ "Type mismatch."
   , "  Expected " ++ show t2
   , "  Found    " ++ show t1
   ]
-showRuleError (VarInifiniteType tv t) =
+showRuleError (InifiniteType tv t) =
   -- This message is kinda impossible to understand I think.
   -- Failure of the "occurs check" is the terminology in the literature for this type of error.
   [ "Infinite type. "

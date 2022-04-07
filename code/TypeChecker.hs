@@ -132,7 +132,7 @@ freeTypeVars (TFunc a b)    = freeTypeVars a ++ freeTypeVars b
 varBind :: TypeVar -> Type -> State TypeEnv TransitionResult
 varBind tv t =
     if tv `elem` freeTypeVars t then
-        return (Left (VarInifiniteType tv t))
+        return (Left (InifiniteType tv t))
     else do
         tEnv <- get
         let TypeEnv { subs } = tEnv
@@ -166,11 +166,11 @@ unify (TUnion ls) (TUnion rs) =
     let nextUnion = TUnion (nub (List.sort (ls ++ rs))) in
     return (Right nextUnion)
 unify (TUnion xs) t =
-    unifyUnion xs t
+    unifyUnion xs xs t
 unify t (TUnion xs) =
-    unifyUnion xs t
+    unifyUnion xs xs t
 unify t1 t2 =
-    return (Left (VarTypeMismatch t1 t2))
+    return (Left (TypeMismatch t1 t2))
 
 unifyCross :: [(Type, Type)] -> [Type] -> State TypeEnv TransitionResult
 unifyCross [] results =
@@ -181,8 +181,8 @@ unifyCross ((t1_, t2_) : ts_) results = do
         Right t -> unifyCross ts_ (t : results)
         Left e  -> return (Left e)
 
-unifyUnion :: [Type] -> Type -> State TypeEnv TransitionResult
-unifyUnion (l : rest) r = do
+unifyUnion :: [Type] -> [Type] -> Type -> State TypeEnv TransitionResult
+unifyUnion fullUnion (l : rest) r = do
     env <- get
     case runState (unify l r) env of
         (Right t, nextEnv) -> do
@@ -190,9 +190,9 @@ unifyUnion (l : rest) r = do
             applySubst
             return (Right t)
         (_, _) ->
-            unifyUnion rest r
-unifyUnion [] _ =
-    error "todo: failed to unify"
+            unifyUnion fullUnion rest r
+unifyUnion fullUnion [] t =
+    return $ Left (TypeMismatch (TUnion fullUnion) t)
 
 
 infer :: Loc Conf -> State TypeEnv Type
