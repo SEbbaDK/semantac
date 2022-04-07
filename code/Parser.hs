@@ -17,7 +17,7 @@ import           Text.Megaparsec.Pos        (unPos)
 
 type Parser = Parsec Void Text
 
-pos2tup (SourcePos {sourceName, sourceLine, sourceColumn}) =
+pos2tup SourcePos {sourceName, sourceLine, sourceColumn} =
   (sourceName, unPos sourceLine, unPos sourceColumn)
 
 getPos = fmap pos2tup getSourcePos
@@ -43,10 +43,10 @@ categoryNameParser = do
   return $ c : rest
 
 systemNameChars :: [Char]
-systemNameChars = "-=~|>#abcdefghjklmnop"
+systemNameChars = "-=~|>→↓#"
 
 systemNameParser :: Parser String
-systemNameParser = many (oneOf systemNameChars)
+systemNameParser = many (oneOf systemNameChars <|> alphaNumChar)
 
 systemParser :: Parser System
 systemParser = do
@@ -111,6 +111,18 @@ specParser = let
     Nothing -> return l
     Just f -> fmap (f l) baseSpecParser
 
+declarationParser :: Parser Declaration
+declarationParser = do
+  try (string "meta")
+  ws
+  name <- many alphaNumChar
+  ws
+  char '='
+  ws
+  spec <- specParser
+  ws
+  return $ Declaration name spec
+
 categoryVariableBaseParser = some lowerChar
 
 categoryParser :: Parser Category
@@ -173,13 +185,13 @@ confElementParser = do
 
   where
     elemSyntaxParser :: Parser Conf
-    elemSyntaxParser = fmap Syntax $ betweenCharEscaped '"'
+    elemSyntaxParser = Syntax <$> betweenCharEscaped '"'
   
     elemVarParser :: Parser Conf
-    elemVarParser    = fmap Var variableParser
+    elemVarParser    = Var <$> variableParser
   
     elemParenParser :: Parser Conf
-    elemParenParser  = fmap Paren $ betweenS "(" confElementParser ")"
+    elemParenParser  = Paren <$> betweenS "(" confElementParser ")"
   
 confParser :: Parser Conf
 confParser =
@@ -187,7 +199,6 @@ confParser =
     "<"
     (fmap Conf (confElementParser `sepBy` comma))
     ">"
-      where
 
 transParser :: Parser Trans
 transParser = do
@@ -198,32 +209,24 @@ transParser = do
   after <- locced confParser
   return $ Trans {system, before, after}
 
-exprVarParser :: Parser Expr
-exprVarParser = do
-  s <- some alphaNumChar
-  return $ EVar s
-
-exprCallParser :: Parser Expr
-exprCallParser = do
-  name <- (do string "+"; n <- some lowerChar; return ("+" ++ n))
-  ws
-  params <- exprVarParser `sepBy` (some $ string " ")
-  return $ EOp name params
+exprParamParser = betweenS "(" (exprParser `sepBy` some (string "," >> ws)) ")"
 
 exprParser :: Parser Expr
-exprParser = try (exprVarParser) <|> exprCallParser
+exprParser = do
+  lhs <- variableParser
+  params <- many exprParamParser
+  ws
+  return $ foldl callify (EVar lhs) params
+    where callify base param = ECall base param
 
 eqParser :: Parser Equality
 eqParser = do
-  try $ string "["
-  ws
   left <- exprParser
   ws
   eq <- try (value (string "==") Eq) <|> (value (string "!=") InEq)
   ws
   right <- exprParser
   ws
-  string "]"
   return $ eq left right
 
 premiseParser :: Parser Premise
@@ -251,22 +254,26 @@ ruleParser = do
 
 topParser :: Parser Top
 topParser =
-  topParser_ (Top [] [] [])
+  topParser_ (Top [] [] [] [])
   where
     topParser_ :: Top -> Parser Top
-    topParser_ (Top categories systems rules) = ws >>
-      value eof (Top (reverse categories) (reverse systems) (reverse rules))
+    topParser_ (Top declarations categories systems rules) = ws >>
+      value eof (Top (reverse declarations) (reverse categories) (reverse systems) (reverse rules))
+        <|> try ( do
+                d <- locced declarationParser
+                topParser_ $ Top (d : declarations) categories systems rules
+            )
         <|> try ( do
                 c <- locced categoryParser
-                topParser_ $ Top (c : categories) systems rules
+                topParser_ $ Top declarations (c : categories) systems rules
             )
         <|> try ( do
                 s <- locced systemParser
-                topParser_ $ Top categories (s : systems) rules
+                topParser_ $ Top declarations categories (s : systems) rules
             )
         <|> try ( do
                 r <- locced ruleParser
-                topParser_ $ Top categories systems (r : rules)
+                topParser_ $ Top declarations categories systems (r : rules)
             )
 
 doParse :: String -> String -> Either (ParseErrorBundle Text Void) Top

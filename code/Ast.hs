@@ -7,7 +7,10 @@ import           Data.List (intercalate, intersperse)
 import           Loc
 
 data Top
-  = Top [Loc Category] [Loc System] [Loc Rule]
+  = Top [Loc Declaration] [Loc Category] [Loc System] [Loc Rule]
+
+data Declaration =
+  Declaration String Spec
 
 data Category
   = Category
@@ -24,24 +27,30 @@ data System
     }
 
 instance Show Top where
-  show (Top categorys systems rules) =
+  show (Top declarations categories systems rules) =
     intercalate "\n" lines
     where
       lines = concat
-        [ map show categorys
+        [ map show declarations
+        , [""]
+        , map show categories
         , [""]
         , map show systems
         , [""]
         , intersperse "" (map show rules)
         ]
 
+instance Show Declaration where
+  show (Declaration name spec) =
+    unwords [ "meta", name, "=", show spec ]
+
 instance Show Category where
   show Category {category, variable, spec} =
-    unwords ["category", variable, "in", category, ":", show spec]
+    unwords [ "category", variable, "in", category, ":", show spec ]
 
 instance Show System where
   show System {arrow, initial, final} =
-    unwords ["system", show initial, arrow, show final]
+    unwords [ "system", show initial, arrow, show final ]
 
 data Spec
   = Integer
@@ -51,7 +60,6 @@ data Spec
   | Cross [Spec]
   | Union [Spec]
   | Func Spec Spec
-
 deriving instance Eq Spec
 
 instance Show Spec where
@@ -59,8 +67,8 @@ instance Show Spec where
   show Identifier    = "Identifier"
   show SSyntax       = "Syntax"
   show (Custom name) = name
-  show (Cross xs)    = intercalate " * " (fmap show xs)
-  show (Union xs)    = intercalate " | " (fmap show xs)
+  show (Cross xs)    = intercalate " ⨯ " (fmap show xs)
+  show (Union xs)    = intercalate " ∪ " (fmap show xs)
   show (Func a b)    = show a ++ " → " ++ show b
 
 data Rule
@@ -143,15 +151,13 @@ data Conf
   | Var Variable
   | SyntaxList [Loc Conf]
   | Paren (Loc Conf)
-  | Binding (Loc Conf) (Loc Conf) (Loc Conf)
 
 instance Show Conf where
-  show (Conf s)        = "<" ++ intercalate ", " (map show s) ++ ">"
+  show (Conf s)        = "⟨" ++ intercalate ", " (map show s) ++ "⟩"
   show (Paren e)       = "(" ++ show e ++ ")"
   show (SyntaxList xs) = unwords $ fmap show xs
   show (Syntax s)      = "\"" ++ s ++ "\""
   show (Var v)         = show v
-  show (Binding v f t) = show v ++ "[" ++ show f ++ "↦" ++ show t ++ "]"
 
 data Premise
   = TPremise Trans
@@ -170,10 +176,10 @@ instance Show Equality where
   show (InEq l r) = show l ++ " ≠ " ++ show r
 
 data Expr
-  = EVar String
-  | EOp String [Expr]
+  = EVar Variable
+  | ECall Expr [Expr]
 
 instance Show Expr where
-  show (EVar s)  = s
-  show (EOp o e) = o ++ " " ++ show e
+  show (EVar s)  = show s
+  show (ECall o e) = show o ++ "(" ++ intercalate ", " (map show e) ++ ")"
 

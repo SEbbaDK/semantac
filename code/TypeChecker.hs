@@ -29,7 +29,7 @@ What can we check?
 type TopResult = Either TopError ()
 
 check :: Top -> TopResult
-check (Top domains systems rules) =
+check (Top declarations domains systems rules) =
     let
         init = Right ()
 
@@ -212,7 +212,6 @@ infer (Loc _ (Var (Variable x n m _))) = do
             t <- TVar <$> newTypeVar
             addBind x t
             return t
-infer (Loc _ Binding {}) = error "todo"
 infer (Loc _ (SyntaxList xs)) =
     TCross <$> mapM infer xs
 
