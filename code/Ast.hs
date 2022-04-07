@@ -116,10 +116,23 @@ data Variable
     , binds    :: [(Variable, Variable)]
     }
 
+varnamer ""  = ""
+varnamer "0" = "₀"
+varnamer "1" = "₁"
+varnamer "2" = "₂"
+varnamer "3" = "₃"
+varnamer "4" = "₄"
+varnamer "5" = "₅"
+varnamer "6" = "₆"
+varnamer "7" = "₇"
+varnamer "8" = "₈"
+varnamer "9" = "₉"
+varnamer nam = "_" ++ nam
+
 instance Show Variable where
   show Variable { typename, varname, marks, binds } = concat
     [ typename
-    , if varname == "" then "" else "_" ++ varname
+    , varnamer varname
     , replicate marks '\''
     , concatMap (\(var, val) -> "[" ++ show var ++ "↦" ++ show val ++ "]") binds
     ]
