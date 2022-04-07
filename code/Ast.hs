@@ -88,15 +88,20 @@ instance Show Rule where
   show Rule {name, base, premises, properties} =
     intercalate "\n" lines
     where
+      center len str = let diff = len - length str
+                       in  replicate (diff `div` 2) ' ' ++ str
+
       premisesStrs = map show premises
       baseStr = show base
       sepLength = maximum (map length (baseStr : premisesStrs))
+      centeredPremStrs = map (center sepLength) premisesStrs
+      centeredBaseStr = center sepLength baseStr
       lines = concat
         [ map show properties
         , [ name ++ ":" ]
-        , premisesStrs
+        , centeredPremStrs
         , [ replicate sepLength '-' | not (null premises) ]
-        , [ baseStr ]
+        , [ centeredBaseStr ]
         ]
 
 data Property = NonDeterministic | NonTerminating
