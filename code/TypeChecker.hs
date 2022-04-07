@@ -15,6 +15,7 @@ import           Data.Map.Strict     as Map (Map, insert, lookup)
 import           Data.Maybe          (fromMaybe)
 import           Debug.Trace         (trace)
 import           Errors
+import           Loc
 import           Types
 
 {-

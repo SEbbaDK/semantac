@@ -4,20 +4,7 @@
 module Ast where
 
 import           Data.List (intercalate, intersperse)
-
-type PosCoord = (String, Int, Int)
-type Pos = (PosCoord, PosCoord)
-data Loc a
-  = Loc Pos a
-
-unLoc :: Loc a -> a
-unLoc (Loc _ a) = a
-
-instance (Show a) => Show (Loc a) where
-  show (Loc _ a) = show a
-
-instance Functor Loc where
-  fmap f (Loc l v) = Loc l (f v)
+import           Loc
 
 data Top
   = Top [Loc Category] [Loc System] [Loc Rule]

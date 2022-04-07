@@ -6,6 +6,7 @@
 module Parser where
 
 import           Ast
+import           Loc
 import           Control.Monad              (void)
 import           Data.Text                  (Text, pack, unpack)
 import           Data.Void                  (Void)

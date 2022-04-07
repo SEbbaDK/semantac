@@ -1,6 +1,7 @@
 module Errors where
 
 import           Ast
+import           Loc
 import           Data.List (intercalate)
 import           Types     (Type (TVar), TypeVar)
 

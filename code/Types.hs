@@ -2,6 +2,7 @@
 module Types where
 
 import           Ast
+import           Loc
 import           Control.Monad       (foldM, void)
 import           Control.Monad.State (MonadState (get, put), State, evalState)
 import           Data.List           as List (intercalate)
