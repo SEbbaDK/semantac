@@ -8,8 +8,9 @@ module TypeChecker where
 import           Ast
 import           Control.Arrow       (left)
 import           Control.Monad       (foldM, void)
-import           Control.Monad.State (MonadState (get, put), State, evalState)
-import           Data.List           as List (intercalate)
+import           Control.Monad.State (MonadState (get, put), State, evalState,
+                                      runState)
+import           Data.List           as List (intercalate, nub, sort)
 import           Data.Map.Strict     as Map (Map, insert, lookup)
 import           Data.Maybe          (fromMaybe)
 import           Debug.Trace         (trace)
@@ -151,11 +152,22 @@ unify (TVar tv) t =
     varBind tv t
 unify (TCross t1) (TCross t2) | length t1 == length t2  =
     unifyCross (zip t1 t2) []
-unify (TFunc a1 b1) (TFunc a2 b2) | a1 == a2 && b1 == b2 = do
-    -- TODO: Finish the TFunc unification
-    error "todo"
+unify (TFunc a1 b1) (TFunc a2 b2) = do
+    a <- unify a1 a2
+    applySubst
+    b <- unify b1 b2
+    applySubst
+    return $ case (a, b) of
+        (Right a, Right b) -> Right (TFunc a b)
+        (Left e, _)        -> Left e
+        (_, Left e)        -> Left e
 unify (TUnion ls) (TUnion rs) =
-    error "todo"
+    let nextUnion = TUnion (nub (List.sort (ls ++ rs))) in
+    return (Right nextUnion)
+unify (TUnion xs) t =
+    unifyUnion xs t
+unify t (TUnion xs) =
+    unifyUnion xs t
 unify t1 t2 =
     return (Left (VarTypeMismatch t1 t2))
 
@@ -167,6 +179,20 @@ unifyCross ((t1_, t2_) : ts_) results = do
     case r of
         Right t -> unifyCross ts_ (t : results)
         Left e  -> return (Left e)
+
+unifyUnion :: [Type] -> Type -> State TypeEnv TransitionResult
+unifyUnion (l : rest) r = do
+    env <- get
+    case runState (unify l r) env of
+        (Right t, nextEnv) -> do
+            put nextEnv
+            applySubst
+            return (Right t)
+        (_, _) ->
+            unifyUnion rest r
+unifyUnion [] _ =
+    error "todo: failed to unify"
+
 
 infer :: Loc Conf -> State TypeEnv Type
 infer (Loc _ (Conf xs)) =
