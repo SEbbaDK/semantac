@@ -4,10 +4,24 @@ category x in Id = Identifier
 
 category env in Env = (Id) -> (Int)
 
-system Syntax x Env =>e Int x Env
+meta if = ((Int x Exp) x Exp) -> Exp
+meta add = (Int x Int) -> Int
+
+
+system Syntax x Env =>s Int x Env
 
 rule Assign
-      <e, env> =>e <i, env'>
+      <e, env> =>s <i, env'>
 --------------------------------------
-<x "=" e, env> =>e <i, env'[x |-> i]>
+<x "=" e, env> =>s <i, env'[x |-> i]>
+
+
+system Syntax x Env =>e Int
+
+rule Add
+<e_1, env> =>e <i_1>
+<e_2, env> =>e <i_2>
+i == add(i_1, i_2)
+--------------------------
+<e_1 "+" e_2, env> =>e <i>
 
