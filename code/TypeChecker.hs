@@ -49,29 +49,23 @@ checkRule domains systems (Loc _ Rule {base, premises, properties}) =
         init = Right ()
 
         f :: RuleResult -> Premise -> State TypeEnv RuleResult
-        f (Right ()) prem = do
-            tmp <- checkPremiseSystems prem
-            return $ left (\case Left e -> toRuleError e ; Right e -> PremiseError e) tmp
-        f l _ = return l
+        f (Right ()) prem = checkPremiseSystems prem
+        f l _             = return l
     in
     evalState (foldM f init premises) tEnv
 
-type PremiseResult = Either (Either UnifyError PremiseError) ()
-
 -- Premise matches system
-checkPremiseSystems :: Premise -> State TypeEnv PremiseResult
+checkPremiseSystems :: Premise -> State TypeEnv RuleResult
 checkPremiseSystems (TPremise trans) = do
     let Trans { system } = trans
     sys <- getSystem system
     case sys of
-        Nothing  -> return (Left (Right (TransitionError (UndefinedArrow system))))
-        Just sys -> fmap
-            (left (fmap TransitionError) . void)
-            (checkTransSystem sys trans)
+        Nothing  -> return (Left (UndefinedArrow system))
+        Just sys -> fmap void (checkTransSystem sys trans)
 checkPremiseSystems (TEquality eq) =
     return (trace "todo: eq" (Right ()))
 
-type TransitionResult = Either (Either UnifyError TransitionError) Type
+type TransitionResult = Either RuleError Type
 
 -- Transition matches system
 checkTransSystem :: System -> Trans -> State TypeEnv TransitionResult
@@ -80,16 +74,14 @@ checkTransSystem System { arrow, initial, final } Trans { system, before, after 
     applySubst
     t1 <- unify t1 (fromSpec initial)
     case t1 of
-        Left e -> return . Left . Left $ e
+        Left e -> return . Left $ e
         Right t1 -> do
             t2 <- infer after
             applySubst
             t2 <- unify t2 (fromSpec final)
             case t2 of
-                Left e   -> return . Left . Left $ e
-                Right t2 -> do
-                    t <- unify t1 t2
-                    return $ left Left t
+                Left e   -> return . Left $ e
+                Right t2 -> unify t1 t2
 
 getSystem :: String -> State TypeEnv (Maybe System)
 getSystem systemArrow = do
@@ -135,23 +127,10 @@ freeTypeVars (TUnion xs)    = concatMap freeTypeVars xs
 freeTypeVars (TVar v)       = [v]
 freeTypeVars (TFunc a b)    = freeTypeVars a ++ freeTypeVars b
 
-
-{- This is essentially just a subset of RuleError, and maybe it should just be replaced by RuleError, but I'm keeping it until we figure out the errors properly because we might need to have slightly different types signatures -}
-data UnifyError
-  = UInfiniteType TypeVar Type
-  | UMismatch Type Type
-
-
-type UnifyResult = Either UnifyError Type
-
-toRuleError :: UnifyError -> RuleError
-toRuleError (UInfiniteType tv t) = VarInifiniteType tv t
-toRuleError (UMismatch t1 t2)    = VarTypeMismatch t1 t2
-
-varBind :: TypeVar -> Type -> State TypeEnv UnifyResult
+varBind :: TypeVar -> Type -> State TypeEnv TransitionResult
 varBind tv t =
     if tv `elem` freeTypeVars t then
-        return (Left (UInfiniteType tv t))
+        return (Left (VarInifiniteType tv t))
     else do
         tEnv <- get
         let TypeEnv { subs } = tEnv
@@ -159,7 +138,7 @@ varBind tv t =
         return (Right t)
 
 
-unify :: Type -> Type -> State TypeEnv UnifyResult
+unify :: Type -> Type -> State TypeEnv TransitionResult
 unify TInteger TInteger =
     return (Right TInteger)
 unify TSyntax TSyntax =
@@ -172,14 +151,15 @@ unify (TVar tv) t =
     varBind tv t
 unify (TCross t1) (TCross t2) | length t1 == length t2  =
     unifyCross (zip t1 t2) []
-    -- TODO: Shouldn't there be a unify TUnion?
-unify (TFunc a1 b1) (TFunc a2 b2) | a1 == a2 && b1 == b2 =
+unify (TFunc a1 b1) (TFunc a2 b2) | a1 == a2 && b1 == b2 = do
     -- TODO: Finish the TFunc unification
     error "todo"
+unify (TUnion ls) (TUnion rs) =
+    error "todo"
 unify t1 t2 =
-    return (Left (UMismatch t1 t2))
+    return (Left (VarTypeMismatch t1 t2))
 
-unifyCross :: [(Type, Type)] -> [Type] -> State TypeEnv UnifyResult
+unifyCross :: [(Type, Type)] -> [Type] -> State TypeEnv TransitionResult
 unifyCross [] results =
     (return . Right . TCross . reverse) results
 unifyCross ((t1_, t2_) : ts_) results = do
@@ -205,6 +185,7 @@ infer (Loc _ (Var (Variable x n m _))) = do
             t <- TVar <$> newTypeVar
             addBind x t
             return t
+infer (Loc _ Binding {}) = error "todo"
 infer (Loc _ (SyntaxList xs)) =
     TCross <$> mapM infer xs
 

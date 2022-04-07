@@ -1,8 +1,8 @@
 module Errors where
 
-import Ast
-import Types (Type (TVar), TypeVar)
-import Data.List (intercalate)
+import           Ast
+import           Data.List (intercalate)
+import           Types     (Type (TVar), TypeVar)
 
 data TopError
   = CategoryError CategoryError
@@ -31,23 +31,13 @@ data CategoryError = CatError
 data SystemError = SysError
 
 data RuleError
-  = PremiseError PremiseError
-  | ConclusionError TransitionError
-  | VarTypeMismatch Type Type
-  | VarInifiniteType TypeVar Type -- occurs check fails
-
-data PremiseError
-  = TransitionError TransitionError
-  | EqualityError EqualityError
-
--- Todo: figure out what errors you can have here
-data EqualityError = EqError
-
-data TransitionError
-  = LeftUndefinedVar (Loc String)
-  | RightUndefinedVar (Loc String)
+  = VarTypeMismatch Type Type
+  | VarInifiniteType TypeVar Type
+  | UndefinedVar (Loc String)
   | UndefinedArrow String
   | ConfTypeMismatch (Loc Type) (Loc String) (Loc Type)
+
+type Lines = [String]
 
 showCategoryError :: CategoryError -> String
 showCategoryError _ = "todo"
@@ -55,22 +45,26 @@ showCategoryError _ = "todo"
 showSystemError :: SystemError -> String
 showSystemError _ = "todo"
 
-showRuleError :: RuleError -> [String]
-showRuleError (PremiseError e) = showPremiseError e
-showRuleError (ConclusionError e) = error "todo"
+showRuleError :: RuleError -> Lines
 showRuleError (VarTypeMismatch t1 t2) =
   [ "Type mismatch."
   , "  Expected " ++ show t2
   , "  Found    " ++ show t1
   ]
 showRuleError (VarInifiniteType tv t) =
+  -- This message is kinda impossible to understand I think.
+  -- Failure of the "occurs check" is the terminology in the literature for this type of error.
   [ "Infinite type. "
   , "  Type variable " ++ show (TVar tv) ++ " occurs in " ++ show t
   ]
-
-showPremiseError :: PremiseError -> [String]
-showPremiseError e = error "todo"
-
-
-showConclusionError :: TransitionError -> [String]
-showConclusionError e = error "todo"
+showRuleError (UndefinedVar (Loc _ name)) =
+  [ "Use of undefined variable \"" ++ name ++ "\""
+  ]
+showRuleError (UndefinedArrow arrowName) =
+  [ "Use of undefined arrow: " ++ arrowName
+  ]
+showRuleError (ConfTypeMismatch left arrow right) =
+  [ "The type of the configuration does not match the type of the transition used."
+  , "  Expected TODO"
+  , "  Found    " ++ show left ++ " " ++ show arrow ++ " " ++ show right
+  ]
