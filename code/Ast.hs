@@ -146,7 +146,7 @@ data Conf
   | Binding (Loc Conf) (Loc Conf) (Loc Conf)
 
 instance Show Conf where
-  show (Conf s)        = "⟨" ++ intercalate ", " (map show s) ++ "⟩"
+  show (Conf s)        = "<" ++ intercalate ", " (map show s) ++ ">"
   show (Paren e)       = "(" ++ show e ++ ")"
   show (SyntaxList xs) = unwords $ fmap show xs
   show (Syntax s)      = "\"" ++ s ++ "\""
