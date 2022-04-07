@@ -29,7 +29,8 @@ instance Show Type where
     show (TCustom name) = name
     show (TCross xs)    = "<" ++ intercalate " , " (fmap show xs) ++ ">"
     show (TUnion xs)    = "(" ++ intercalate " | " (fmap show xs) ++ ")"
-    show (TVar tv)      =  show tv
+    show (TFunc a b)    = show a ++ " → " ++ show b
+    show (TVar tv)      = show tv
 
 fromSpec :: Spec -> Type
 fromSpec Integer    = TInteger
