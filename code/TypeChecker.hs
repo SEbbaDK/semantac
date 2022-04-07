@@ -188,14 +188,14 @@ unifyCross ((t1_, t2_) : ts_) results = do
         Right t -> unifyCross ts_ (t : results)
         Left e  -> return (Left e)
 
-infer :: Conf -> State TypeEnv Type
-infer (Conf xs) =
+infer :: Loc Conf -> State TypeEnv Type
+infer (Loc _ (Conf xs)) =
     TCross <$> mapM infer xs
-infer (Paren e) =
+infer (Loc _ (Paren e)) =
     infer e
-infer (Syntax _) =
+infer (Loc _ (Syntax _)) =
     return TSyntax
-infer (Var (Variable x n m _)) = do
+infer (Loc _ (Var (Variable x n m _))) = do
     -- TODO: This should make the inferred variable need to be a
     --       function if there is bindings
     maybeT <- lookupBind (x ++ "_" ++ n ++ replicate m '\'')
@@ -205,6 +205,6 @@ infer (Var (Variable x n m _)) = do
             t <- TVar <$> newTypeVar
             addBind x t
             return t
-infer (SyntaxList xs) =
+infer (Loc _ (SyntaxList xs)) =
     TCross <$> mapM infer xs
 

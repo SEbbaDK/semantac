@@ -108,8 +108,8 @@ instance Show Property where
 data Trans
   = Trans
     { system :: String
-    , before :: Conf
-    , after  :: Conf
+    , before :: Loc Conf
+    , after  :: Loc Conf
     }
 
 instance Show Trans where
@@ -129,15 +129,16 @@ instance Show Variable where
     [ typename
     , if varname == "" then "" else "_" ++ varname
     , replicate marks '\''
-    , concat $ map (\(var, val) -> "[" ++ show var ++ "↦" ++ show val ++ "]") binds
+    , concatMap (\(var, val) -> "[" ++ show var ++ "↦" ++ show val ++ "]") binds
     ]
 
 data Conf
-  = Conf [Conf]
+  = Conf [Loc Conf]
   | Syntax String
   | Var Variable
-  | SyntaxList [Conf]
-  | Paren Conf
+  | SyntaxList [Loc Conf]
+  | Paren (Loc Conf)
+  | Binding (Loc Conf) (Loc Conf) (Loc Conf)
 
 instance Show Conf where
   show (Conf s)        = "⟨" ++ intercalate ", " (map show s) ++ "⟩"
@@ -145,6 +146,7 @@ instance Show Conf where
   show (SyntaxList xs) = unwords $ fmap show xs
   show (Syntax s)      = "\"" ++ s ++ "\""
   show (Var v)         = show v
+  show (Binding v f t) = show v ++ "[" ++ show f ++ "↦" ++ show t ++ "]"
 
 data Premise
   = TPremise Trans

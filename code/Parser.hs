@@ -19,11 +19,13 @@ type Parser = Parsec Void Text
 pos2tup (SourcePos {sourceName, sourceLine, sourceColumn}) =
   (sourceName, unPos sourceLine, unPos sourceColumn)
 
+getPos = fmap pos2tup getSourcePos
+
 locced :: Parser a -> Parser (Loc a)
 locced p = do
-  start <- fmap pos2tup getSourcePos
+  start <- getPos
   result <- p
-  end <- fmap pos2tup getSourcePos
+  end <- getPos
   return $ Loc (start, end) result
 
 ws :: Parser ()
@@ -158,13 +160,15 @@ variableParser = do
   binds <- many bindingParser
   return $ Variable base name marks binds
 
-confElementParser :: Parser Conf
+confElementParser :: Parser (Loc Conf)
 confElementParser = do
+  start <- getPos
   let parsers = try elemSyntaxParser <|> try elemVarParser <|> elemParenParser
-  elems <- parsers `sepBy` ws
+  elems <- (locced parsers) `sepBy` ws
+  end <- getPos
   return $ case elems of
     [e] -> e
-    l   -> SyntaxList l
+    l   -> Loc (start,end) $ SyntaxList l
 
   where
     elemSyntaxParser :: Parser Conf
@@ -186,11 +190,11 @@ confParser =
 
 transParser :: Parser Trans
 transParser = do
-  before <- try confParser
+  before <- try $ locced confParser
   ws
   system <- systemNameParser
   ws
-  after <- confParser
+  after <- locced confParser
   return $ Trans {system, before, after}
 
 exprVarParser :: Parser Expr
