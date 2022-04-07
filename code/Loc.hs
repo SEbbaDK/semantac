@@ -35,6 +35,6 @@ showLocInSource (Loc pos _) src = intercalate "\n" $ fst $ foldr mark ([], 0) $ 
       | index == l1                = ([ line, underline c1 len line ] ++ res,    index + 1)
       | index == l2                = ([ line, underline 0  c2  line ] ++ res,    index + 1)
       | index < l1 && index > l2   = ([ line, underline 0  len line ] ++ res,    index + 1)
-      | otherwise = error "wtf"
+      | otherwise                  = (res, index + 1)
         where len = length line
 
