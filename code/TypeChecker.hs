@@ -54,20 +54,25 @@ newTypeEnv domains systems context = TypeEnv
     , contextStack = [context]
     }
 
--- Maybe use a higher order function instead of `push` and `pop`?
-pushContext :: Context -> State TypeEnv ()
-pushContext ctx = do
-    cCtx <- get
-    let TypeEnv { contextStack } = cCtx
-    put cCtx { contextStack = ctx : contextStack }
-
-popContext :: State TypeEnv ()
-popContext = do
-    cCtx <- get
-    let TypeEnv { contextStack } = cCtx
-    case contextStack of
-        []               -> return ()
-        _ : nextCtxStack -> put cCtx { contextStack = nextCtxStack }
+context :: Context -> State TypeEnv a -> State TypeEnv a
+context ctx s = do
+    pushContext ctx
+    res <- s
+    popContext
+    return res
+    where
+        pushContext :: Context -> State TypeEnv ()
+        pushContext ctx = do
+            cCtx <- get
+            let TypeEnv { contextStack } = cCtx
+            put cCtx { contextStack = ctx : contextStack }
+        popContext :: State TypeEnv ()
+        popContext = do
+            cCtx <- get
+            let TypeEnv { contextStack } = cCtx
+            case contextStack of
+                []               -> return ()
+                _ : nextCtxStack -> put cCtx { contextStack = nextCtxStack }
 
 checkRule :: [Loc Category] -> [Loc System] -> Loc Rule -> RuleResult
 checkRule domains systems rule =
@@ -90,33 +95,31 @@ checkRule_ domains systems rule =
         res <- foldM f (Right ()) premises
         case res of
             Left e   -> return (Left e)
-            Right () -> checkConclusion (fakeLoc base)
+            Right () -> context (CConclusion (fakeLoc base)) (checkConclusion (fakeLoc base))
 
 -- Premise matches system
 checkPremises :: Loc Premise -> State TypeEnv RuleResult
-checkPremises (Loc l (TPremise trans)) = do
-    pushContext $ CPremise (Loc l (TPremise trans))
-    let Trans { system } = trans
-    sys <- getSystem system
-    case sys of
-        Nothing  -> returnError (UndefinedArrow (Loc l system))
-        Just sys -> do
-            fmap void (checkTransSystem sys trans)
-            popContext
-            return (Right ())
+checkPremises (Loc l (TPremise trans)) =
+    context (CPremise (Loc l (TPremise trans)))
+    (do
+        let Trans { system } = trans
+        sys <- getSystem system
+        case sys of
+            Nothing  -> returnError (UndefinedArrow (Loc l system))
+            Just sys -> do
+                fmap void (checkTransSystem sys trans)
+                return (Right ()))
 checkPremises (Loc _ (TEquality eq)) =
     return (trace "todo: eq" (Right ()))
 
 checkConclusion :: Loc Trans -> State TypeEnv RuleResult
 checkConclusion (Loc l trans) = do
-    pushContext $ CPremise (Loc l (TPremise trans))
     let Trans { system } = trans
     sys <- getSystem system
     case sys of
         Nothing  -> returnError (UndefinedArrow (Loc l system))
         Just sys -> do
             fmap void (checkTransSystem sys trans)
-            popContext
             return (Right ())
 
 type TransitionResult = Either (Error RuleError) Type
@@ -125,13 +128,9 @@ type TransitionResult = Either (Error RuleError) Type
 checkTransSystem :: Loc System -> Trans -> State TypeEnv TransitionResult
 checkTransSystem sys Trans { system, before, after } = do
     let Loc _ System { arrow, initial, final } = sys
-    pushContext (CConf before)
-    t1 <- infer before
-    popContext
+    t1 <- context (CConf before) (infer before)
     applySubst
-    pushContext (CConf after)
-    t1 <- unify t1 (fromSpec initial)
-    popContext
+    t1 <- context (CConf after) (unify t1 (fromSpec initial))
     case t1 of
         Left e -> return . Left $ e
         Right t1 -> do

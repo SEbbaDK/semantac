@@ -82,7 +82,7 @@ data Context
   | CPremise (Loc Premise)
   | CEquality (Loc Expr) (Loc Expr)
   | CInequality (Loc Expr) (Loc Expr)
-  | CTransition (Loc Trans)
+  | CConclusion (Loc Trans)
   | CConf (Loc Conf)
   | CConfSyntaxList [Loc Conf]
   | CConfBinding (Loc Conf) (Loc Conf) (Loc Conf)
@@ -116,7 +116,7 @@ contextName (CSpec node)                    = "Spec"
 contextName (CPremise node)                 = "Premise"
 contextName (CEquality left right)          = "Equality"
 contextName (CInequality left right)        = "Inequality"
-contextName (CTransition node)              = "Transition"
+contextName (CConclusion node)              = "Conclusion"
 contextName (CConf node)                    = "Conf"
 contextName (CConfSyntaxList node)          = "ConfSyntaxList"
 contextName (CConfBinding left arrow right) = "ConfBinding"
@@ -129,7 +129,7 @@ contextLoc (CSpec (Loc l _))                      = l
 contextLoc (CPremise (Loc l _))                   = l
 contextLoc (CEquality (Loc l1 _) (Loc l2 _))      = l1 -- TODO: merge l1 and l2
 contextLoc (CInequality (Loc l1 _) (Loc l2 _))    = l1
-contextLoc (CTransition (Loc l _))                = l
+contextLoc (CConclusion (Loc l _))                = l
 contextLoc (CConf (Loc l _))                      = l
 contextLoc (CConfSyntaxList [])                   = error "todo"
 contextLoc (CConfSyntaxList ((Loc l _) : xs))     = l
