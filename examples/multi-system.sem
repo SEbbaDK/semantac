@@ -4,7 +4,7 @@ category x in Id = Identifier
 
 category env in Env = (Id) -> (Int)
 
-meta if = ((Int x Exp) x Exp) -> Exp
+meta if = (Int x Exp x Exp) -> Exp
 meta add = (Int x Int) -> Int
 
 

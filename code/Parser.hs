@@ -109,7 +109,7 @@ specParser = let
   ws
   case o of
     Nothing -> return l
-    Just f -> fmap (f l) baseSpecParser
+    Just f -> fmap (f l) specParser
 
 declarationParser :: Parser Declaration
 declarationParser = do
