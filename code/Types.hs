@@ -2,13 +2,13 @@
 module Types where
 
 import           Ast
-import           Loc
 import           Control.Monad       (foldM, void)
 import           Control.Monad.State (MonadState (get, put), State, evalState)
 import           Data.List           as List (intercalate)
 import           Data.Map.Strict     as Map (Map, insert, lookup)
 import           Data.Maybe          (fromMaybe)
 import           Debug.Trace         (trace)
+import           Loc
 
 
 data Type
@@ -64,29 +64,4 @@ subst subs (TCross xs) = TCross (fmap (subst subs) xs)
 subst subs (TUnion xs) = TUnion (fmap (subst subs) xs)
 subst subs (TFunc a b) = TFunc (subst subs a) (subst subs b)
 subst subs (TVar tv)   = fromMaybe (TVar tv) (Map.lookup tv subs)
-
-
-data TypeEnv
-  = TypeEnv
-    { nextTypeVar_ :: TypeVar
-    , subs         :: Substitutions
-    , bindings     :: Map String Type
-    , domains      :: [Loc Category]
-    , systems      :: [Loc System]
-    }
-
-newTypeEnv :: [Loc Category] -> [Loc System] -> TypeEnv
-newTypeEnv domains systems = TypeEnv
-    { nextTypeVar_ = TypeVar 1
-    , subs = mempty
-    , bindings = mempty
-    , domains
-    , systems
-    }
-
-nextTypeVar :: TypeEnv -> (TypeVar, TypeEnv)
-nextTypeVar tEnv =
-    let TypeEnv { nextTypeVar_ = TypeVar tv } = tEnv
-        nextTEnv = tEnv { nextTypeVar_ = TypeVar (tv + 1) }
-    in (TypeVar tv, nextTEnv)
 

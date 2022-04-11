@@ -2,6 +2,8 @@
 {-# LANGUAGE NamedFieldPuns #-}
 
 import           Data.Semigroup        ((<>))
+import           Errors                (Error (Error), showErrorMessage,
+                                        showStackTrace)
 import           Options.Applicative
 import           Parser                (doParse)
 import           Text.Megaparsec.Error (errorBundlePretty)
@@ -33,6 +35,8 @@ cli Args {file, latex = False} = do
       putStrLn "\n"
       case check ast  of
         Right _  -> putStrLn "Checks passed"
-        Left err -> putStrLn $ "Error: " ++ show err
+        Left err -> do
+          putStr $ "Error: " ++ showErrorMessage err
+          putStr $ concatMap ("\n  in " ++) (showStackTrace err)
 cli Args {file, latex = True} = do
   putStrLn "latex mode"
