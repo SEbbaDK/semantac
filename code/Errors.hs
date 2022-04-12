@@ -3,7 +3,7 @@ module Errors where
 
 import           Ast
 import           Data.List (intercalate)
-import           Loc       (Loc (Loc), Pos, showLocInSource, showPos)
+import           Loc       (Loc (Loc), Pos, showPosInSource, showPos, pos)
 import           Types     (Type (TVar), TypeVar)
 
 newtype Error a
@@ -37,6 +37,10 @@ type Lines = [String]
 showErrorMessage :: Error TopError -> String
 showErrorMessage (Error (ctx, e)) = intercalate "\n" (showTopErrorLines e)
 
+showErrorInSource (Error (ctx, _)) src =
+  let p = contextPos $ head ctx
+  in showPosInSource p src
+
 showTopErrorLines :: TopError -> Lines
 showTopErrorLines (CategoryError e)        = showCategoryError e
 showTopErrorLines (SystemError e)          = showSystemError e
@@ -51,7 +55,7 @@ showSystemError _ = ["todo"]
 
 showRuleError :: RuleError -> Lines
 showRuleError (TypeMismatch t1 t2) =
-  [ "Type mismatch at " ++ showLocInSource t2 ""
+  [ "Type mismatch at " ++ showPos (pos t2)
   , "  Expected " ++ show t2
   , "  Found    " ++ show t1
   ]
@@ -96,14 +100,14 @@ showStackTrace_ :: ContextStack -> Lines
 showStackTrace_ stack =
   let
     names = map contextName stack
-    locs = map contextLoc stack
+    locs = map contextPos stack
 
     maxLeftLen = maximum (map length names)
 
     combine :: (String, Pos) -> String
     combine (name, pos) =
       let padding = maxLeftLen - length name + 4 in
-      name ++ concat (replicate padding " ") ++ "[" ++ showPos pos ++ "]"
+      name ++ concat (replicate padding " ") ++ "[" ++ showPos pos ++ "]\n"
   in
   fmap combine (zip names locs)
 
@@ -121,17 +125,17 @@ contextName (CConf node)                    = "Conf"
 contextName (CConfSyntaxList node)          = "ConfSyntaxList"
 contextName (CConfBinding left arrow right) = "ConfBinding"
 
-contextLoc :: Context -> Pos
-contextLoc (CRule (Loc l _))                      = l
-contextLoc (CCategory (Loc l _))                  = l
-contextLoc (CSystem (Loc l _))                    = l
-contextLoc (CSpec (Loc l _))                      = l
-contextLoc (CPremise (Loc l _))                   = l
-contextLoc (CEquality (Loc l1 _) (Loc l2 _))      = l1 -- TODO: merge l1 and l2
-contextLoc (CInequality (Loc l1 _) (Loc l2 _))    = l1
-contextLoc (CConclusion (Loc l _))                = l
-contextLoc (CConf (Loc l _))                      = l
-contextLoc (CConfSyntaxList [])                   = error "todo"
-contextLoc (CConfSyntaxList ((Loc l _) : xs))     = l
-contextLoc (CConfBinding (Loc l1 _) _ (Loc l2 _)) = l1
+contextPos :: Context -> Pos
+contextPos (CRule (Loc l _))                      = l
+contextPos (CCategory (Loc l _))                  = l
+contextPos (CSystem (Loc l _))                    = l
+contextPos (CSpec (Loc l _))                      = l
+contextPos (CPremise (Loc l _))                   = l
+contextPos (CEquality (Loc l1 _) (Loc l2 _))      = l1 -- TODO: merge l1 and l2
+contextPos (CInequality (Loc l1 _) (Loc l2 _))    = l1
+contextPos (CConclusion (Loc l _))                = l
+contextPos (CConf (Loc l _))                      = l
+contextPos (CConfSyntaxList [])                   = error "todo"
+contextPos (CConfSyntaxList ((Loc l _) : xs))     = l
+contextPos (CConfBinding (Loc l1 _) _ (Loc l2 _)) = l1
 

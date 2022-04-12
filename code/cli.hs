@@ -3,7 +3,7 @@
 
 import           Data.Semigroup        ((<>))
 import           Errors                (Error (Error), showErrorMessage,
-                                        showStackTrace)
+                                        showStackTrace, showErrorInSource)
 import           Options.Applicative
 import           Parser                (doParse)
 import           Text.Megaparsec.Error (errorBundlePretty)
@@ -26,8 +26,8 @@ main = cli =<< execParser (info (parser <**> helper) (fullDesc <> progDesc "test
 
 cli :: Args -> IO ()
 cli Args {file, latex = False} = do
-  content <- readFile file
-  case doParse file content of
+  src <- readFile file
+  case doParse file src of
     Left err ->
       putStrLn $ "Parsing error\n" ++ errorBundlePretty err
     Right ast -> do
@@ -36,7 +36,8 @@ cli Args {file, latex = False} = do
       case check ast  of
         Right _  -> putStrLn "Checks passed"
         Left err -> do
-          putStr $ "Error: " ++ showErrorMessage err
-          putStr $ concatMap ("\n  in " ++) (showStackTrace err)
+          putStrLn $ "Error: " ++ showErrorMessage err
+          putStrLn $ concatMap ("  in " ++) (showStackTrace err)
+          putStrLn $ showErrorInSource err src
 cli Args {file, latex = True} = do
   putStrLn "latex mode"
