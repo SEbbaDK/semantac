@@ -231,7 +231,7 @@ eqParser = do
 
 premiseParser :: Parser Premise
 premiseParser = do
-  p <- fmap TPremise transParser <|> fmap TEquality eqParser
+  p <- fmap TPremise transParser <|> fmap EPremise eqParser
   ws
   return p
 

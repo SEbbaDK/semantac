@@ -161,11 +161,11 @@ instance Show Conf where
 
 data Premise
   = TPremise Trans
-  | TEquality Equality
+  | EPremise Equality
 
 instance Show Premise where
   show (TPremise trans) = show trans
-  show (TEquality eq)   = show eq
+  show (EPremise eq)   = show eq
 
 data Equality
   = Eq Expr Expr

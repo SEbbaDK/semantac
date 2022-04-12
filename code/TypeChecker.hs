@@ -64,13 +64,26 @@ checkPremiseSystems (TPremise trans) = do
     case sys of
         Nothing  -> return (Left (UndefinedArrow system))
         Just sys -> fmap void (checkTransSystem sys trans)
-checkPremiseSystems (TEquality eq) =
-    return (trace "todo: eq" (Right ()))
+checkPremiseSystems (EPremise eq) =
+    fmap void $ checkEquality eq
 
-type TransitionResult = Either RuleError Type
+
+type TypeResult = Either RuleError Type
+
+
+checkEquality :: Equality -> State TypeEnv TypeResult
+checkEquality eq = case eq of
+  Eq   l r -> eqCheck l r
+  InEq l r -> eqCheck l r
+  where eqCheck l r = do
+            left <- infer $ unLoc l
+            right <- infer $ unLoc r
+            return $ unify left right
+
+
 
 -- Transition matches system
-checkTransSystem :: System -> Trans -> State TypeEnv TransitionResult
+checkTransSystem :: System -> Trans -> State TypeEnv TypeResult
 checkTransSystem System { arrow, initial, final } Trans { system, before, after } = do
     t1 <- infer before
     applySubst
@@ -129,7 +142,7 @@ freeTypeVars (TUnion xs)    = concatMap freeTypeVars xs
 freeTypeVars (TVar v)       = [v]
 freeTypeVars (TFunc a b)    = freeTypeVars a ++ freeTypeVars b
 
-varBind :: TypeVar -> Type -> State TypeEnv TransitionResult
+varBind :: TypeVar -> Type -> State TypeEnv TypeResult
 varBind tv t =
     if tv `elem` freeTypeVars t then
         return (Left (InifiniteType tv t))
@@ -140,7 +153,7 @@ varBind tv t =
         return (Right t)
 
 
-unify :: Type -> Type -> State TypeEnv TransitionResult
+unify :: Type -> Type -> State TypeEnv TypeResult
 unify TInteger TInteger =
     return (Right TInteger)
 unify TSyntax TSyntax =
@@ -172,7 +185,7 @@ unify t (TUnion xs) =
 unify t1 t2 =
     return (Left (TypeMismatch t1 t2))
 
-unifyCross :: [(Type, Type)] -> [Type] -> State TypeEnv TransitionResult
+unifyCross :: [(Type, Type)] -> [Type] -> State TypeEnv TypeResult
 unifyCross [] results =
     (return . Right . TCross . reverse) results
 unifyCross ((t1_, t2_) : ts_) results = do
@@ -181,7 +194,7 @@ unifyCross ((t1_, t2_) : ts_) results = do
         Right t -> unifyCross ts_ (t : results)
         Left e  -> return (Left e)
 
-unifyUnion :: [Type] -> [Type] -> Type -> State TypeEnv TransitionResult
+unifyUnion :: [Type] -> [Type] -> Type -> State TypeEnv TypeResult
 unifyUnion fullUnion (l : rest) r = do
     env <- get
     case runState (unify l r) env of
