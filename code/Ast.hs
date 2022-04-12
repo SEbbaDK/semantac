@@ -28,15 +28,12 @@ data System
 
 instance Show Top where
   show (Top declarations categories systems rules) =
-    intercalate "\n" lines
+    unlines lines
     where
-      lines = concat
+      lines = intercalate [""]
         [ map show declarations
-        , [""]
         , map show categories
-        , [""]
         , map show systems
-        , [""]
         , intersperse "" (map show rules)
         ]
 
@@ -81,7 +78,7 @@ data Rule
 
 instance Show Rule where
   show Rule {name, base, premises, properties} =
-    intercalate "\n" lines
+    unlines lines
     where
       center len str = let diff = len - length str
                        in  replicate (diff `div` 2) ' ' ++ str

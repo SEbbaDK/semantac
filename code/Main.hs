@@ -8,36 +8,40 @@ import           Options.Applicative
 import           Parser                (doParse)
 import           Text.Megaparsec.Error (errorBundlePretty)
 import           TypeChecker           (check)
+import           System.IO             (stderr, hPutStrLn)
+
+putErrLn = hPutStrLn stderr
 
 data Args
   = Args
-    { file  :: String
-    , latex :: Bool
+    { file       :: String
+    , printast   :: Bool
+    , printlatex :: Bool
     }
 
 parser :: Parser Args
 parser =
   Args
   <$> argument str (metavar "FILE")
-  <*> switch (long "latex" <> short 'l' <> help "Print latex output")
+  <*> switch (long "print-ast"   <> short 'a' <> help "Print the AST")
+  <*> switch (long "print-latex" <> short 'l' <> help "Print latex output")
 
 main :: IO ()
 main = cli =<< execParser (info (parser <**> helper) (fullDesc <> progDesc "test" <> header "test2"))
 
 cli :: Args -> IO ()
-cli Args {file, latex = False} = do
+cli Args {file, printast, printlatex = False} = do
   src <- readFile file
   case doParse file src of
     Left err ->
-      putStrLn $ "Parsing error\n" ++ errorBundlePretty err
+      putErrLn $ "Parsing error\n" ++ errorBundlePretty err
     Right ast -> do
-      print ast
-      putStrLn "\n"
-      case check ast  of
+      if printast then print ast else return ()
+      case check ast of
         Right _  -> putStrLn "Checks passed"
         Left err -> do
-          putStrLn $ "Error: " ++ showErrorMessage err
-          putStrLn $ showErrorInSource err src
-          putStrLn $ concatMap ("  in " ++) (showStackTrace err)
-cli Args {file, latex = True} = do
+          putErrLn $ "Error: " ++ showErrorMessage err
+          putErrLn $ showErrorInSource err src
+          putErrLn $ concatMap ("  in " ++) (showStackTrace err)
+cli Args {file, printast, printlatex = True} = do
   putStrLn "latex mode"

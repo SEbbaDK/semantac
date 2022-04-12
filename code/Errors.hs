@@ -35,7 +35,7 @@ data RuleError
 type Lines = [String]
 
 showErrorMessage :: Error TopError -> String
-showErrorMessage (Error (ctx, e)) = intercalate "\n" (showTopErrorLines e)
+showErrorMessage (Error (ctx, e)) = unlines (showTopErrorLines e)
 
 showErrorInSource (Error (ctx, _)) src =
   let p = contextPos $ head ctx
