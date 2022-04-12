@@ -1,6 +1,6 @@
 #!/usr/bin/env runhaskell
 {-# LANGUAGE NamedFieldPuns #-}
-
+module Main where
 import           Data.Semigroup        ((<>))
 import           Errors                (Error (Error), showErrorMessage,
                                         showStackTrace, showErrorInSource)
