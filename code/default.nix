@@ -12,4 +12,6 @@ pkgs.stdenv.mkDerivation {
     	]))
     	pkgs.stylish-haskell
 	];
+
+	LANG="C.UTF8";
 }
