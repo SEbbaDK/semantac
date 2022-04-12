@@ -1,10 +1,8 @@
-{-# LANGUAGE OverloadedStrings #-}
-
 module Loc where
 
-import Data.Text (splitOn)
-import Data.List (intercalate)
-import Data.Tuple (fst)
+import           Data.List  (intercalate)
+import           Data.Text  (splitOn)
+import           Data.Tuple (fst)
 
 type PosCoord = (String, Int, Int)
 type Pos = (PosCoord, PosCoord)
@@ -13,6 +11,9 @@ data Loc a
 
 unLoc :: Loc a -> a
 unLoc (Loc _ a) = a
+
+fakeLoc :: a -> Loc a
+fakeLoc = Loc (("fake", 0, 0), ("fake", 0, 0))
 
 instance (Show a) => Show (Loc a) where
   show (Loc _ a) = show a
@@ -37,4 +38,3 @@ showLocInSource (Loc pos _) src = intercalate "\n" $ fst $ foldr mark ([], 0) $ 
       | index < l1 && index > l2   = ([ line, underline 0  len line ] ++ res,    index + 1)
       | otherwise                  = (res, index + 1)
         where len = length line
-

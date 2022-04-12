@@ -7,7 +7,7 @@ module TypeChecker where
 
 import           Ast
 import           Control.Arrow       (left)
-import           Control.Monad       (foldM, void)
+import           Control.Monad       (foldM, foldM_, void)
 import           Control.Monad.State (MonadState (get, put), State, evalState,
                                       runState)
 import           Data.List           as List (intercalate, nub, sort)
@@ -18,15 +18,7 @@ import           Errors
 import           Loc
 import           Types
 
-{-
-What can we check?
-- Transitions are consistent with their systems.
-- Variables in the conclusion must be defined.
-- Variables must not conflict with eachother.
-- Syntax nodes must be consistent with the grammar.
--}
-
-type TopResult = Either TopError ()
+type TopResult = Either (Error TopError) ()
 
 check :: Top -> TopResult
 check (Top declarations domains systems rules) =
@@ -35,59 +27,136 @@ check (Top declarations domains systems rules) =
 
         f :: TopResult -> Loc Rule -> TopResult
         f (Right ()) rule =
-            left (RuleError ruleName) (checkRule domains systems rule)
+            left (fmap (RuleError ruleName)) (checkRule domains systems rule)
             where Rule { name = ruleName } = unLoc rule
         f (Left e) rule   = Left e
     in
     foldl f init rules
 
-type RuleResult = Either RuleError ()
+type RuleResult = Either (Error RuleError) ()
+
+data TypeEnv
+  = TypeEnv
+    { nextTypeVar_ :: TypeVar
+    , subs         :: Substitutions
+    , bindings     :: Map String Type
+    , domains      :: [Loc Category]
+    , systems      :: [Loc System]
+    , contextStack :: ContextStack
+    }
+newTypeEnv :: [Loc Category] -> [Loc System] -> Context -> TypeEnv
+newTypeEnv domains systems context = TypeEnv
+    { nextTypeVar_ = TypeVar 1
+    , subs = mempty
+    , bindings = mempty
+    , domains
+    , systems
+    , contextStack = [context]
+    }
+
+context :: Context -> State TypeEnv a -> State TypeEnv a
+context ctx s = do
+    pushContext ctx
+    res <- s
+    popContext
+    return res
+    where
+        pushContext :: Context -> State TypeEnv ()
+        pushContext ctx = do
+            cCtx <- get
+            let TypeEnv { contextStack } = cCtx
+            put cCtx { contextStack = ctx : contextStack }
+        popContext :: State TypeEnv ()
+        popContext = do
+            cCtx <- get
+            let TypeEnv { contextStack } = cCtx
+            case contextStack of
+                []               -> return ()
+                _ : nextCtxStack -> put cCtx { contextStack = nextCtxStack }
 
 checkRule :: [Loc Category] -> [Loc System] -> Loc Rule -> RuleResult
-checkRule domains systems (Loc _ Rule {base, premises, properties}) =
+checkRule domains systems rule =
     let
-        tEnv = newTypeEnv domains systems
+        tEnv = newTypeEnv domains systems (CRule rule)
 
-        init = Right ()
-
-        f :: RuleResult -> Premise -> State TypeEnv RuleResult
-        f (Right ()) prem = checkPremiseSystems prem
-        f l _             = return l
+        Rule {base, premises, properties} = unLoc rule
     in
-    evalState (foldM f init premises) tEnv
+    evalState (checkRule_ domains systems rule) tEnv
+
+checkRule_ :: [Loc Category] -> [Loc System] -> Loc Rule -> State TypeEnv RuleResult
+checkRule_ domains systems rule =
+    let
+        f :: RuleResult -> Premise -> State TypeEnv RuleResult
+        f (Right ()) prem = checkPremise (fakeLoc prem)
+        f l _             = return l
+
+        Rule {base, premises, properties} = unLoc rule
+    in do
+        res <- foldM f (Right ()) premises
+        case res of
+            Left e   -> return (Left e)
+            Right () -> context (CConclusion (fakeLoc base)) (checkConclusion (fakeLoc base))
 
 -- Premise matches system
-checkPremiseSystems :: Premise -> State TypeEnv RuleResult
-checkPremiseSystems (TPremise trans) = do
+checkPremise :: Loc Premise -> State TypeEnv RuleResult
+checkPremise (Loc l (TPremise trans)) =
+    context (CPremise (Loc l (TPremise trans)))
+    (do
+        let Trans { system } = trans
+        sys <- getSystem system
+        case sys of
+            Nothing  -> returnError (UndefinedArrow (Loc l system))
+            Just sys -> do
+                fmap void (checkTransSystem sys trans)
+                return (Right ()))
+checkPremise (Loc l (EPremise eq)) =
+    fmap void $ checkEquality eq
+
+checkConclusion :: Loc Trans -> State TypeEnv RuleResult
+checkConclusion (Loc l trans) = do
     let Trans { system } = trans
     sys <- getSystem system
     case sys of
-        Nothing  -> return (Left (UndefinedArrow system))
-        Just sys -> fmap void (checkTransSystem sys trans)
-checkPremiseSystems (EPremise eq) =
-    fmap void $ checkEquality eq
+        Nothing  -> returnError (UndefinedArrow (Loc l system))
+        Just sys -> do
+            fmap void (checkTransSystem sys trans)
+            return (Right ())
 
 
-type TypeResult = Either RuleError Type
-
+type TypeResult = Either (Error RuleError) Type
 
 checkEquality :: Equality -> State TypeEnv TypeResult
 checkEquality eq = case eq of
   Eq   l r -> eqCheck l r
   InEq l r -> eqCheck l r
-  where eqCheck l r = do
-            left <- infer $ unLoc l
-            right <- infer $ unLoc r
-            return $ unify left right
+  where eqCheck :: Expr -> Expr -> State TypeEnv TypeResult
+        eqCheck l r = do
+            left <- inferExpr l
+            case left of
+              Left e -> return $ Left e
+              Right t1 -> do
+                right <- inferExpr r
+                case right of
+                  Left e -> return $ Left e
+                  Right t2 -> unify t1 t2
 
+inferExpr :: Expr -> State TypeEnv TypeResult
+inferExpr (EVar v) =
+  Right <$> inferVar v
+inferExpr (ECall base params) = do
+  -- b <- inferExpr base
+  -- p <- fmap inferExpr params
+  -- TODO: This should actually find the func def and check things
+  error "Can't infer calls yet"
 
 
 -- Transition matches system
-checkTransSystem :: System -> Trans -> State TypeEnv TypeResult
-checkTransSystem System { arrow, initial, final } Trans { system, before, after } = do
-    t1 <- infer before
+checkTransSystem :: Loc System -> Trans -> State TypeEnv TypeResult
+checkTransSystem sys Trans { system, before, after } = do
+    let Loc _ System { arrow, initial, final } = sys
+    t1 <- context (CConf before) (infer before)
     applySubst
-    t1 <- unify t1 (fromSpec initial)
+    t1 <- context (CConf after) (unify t1 (fromSpec initial))
     case t1 of
         Left e -> return . Left $ e
         Right t1 -> do
@@ -98,19 +167,44 @@ checkTransSystem System { arrow, initial, final } Trans { system, before, after 
                 Left e   -> return . Left $ e
                 Right t2 -> unify t1 t2
 
-getSystem :: String -> State TypeEnv (Maybe System)
+infer :: Loc Conf -> State TypeEnv Type
+infer (Loc _ (Conf xs)) =
+    TCross <$> mapM infer xs
+infer (Loc _ (Paren e)) =
+    infer e
+infer (Loc _ (Syntax _)) =
+    return TSyntax
+infer (Loc _ (Var v)) = inferVar v
+infer (Loc _ (SyntaxList xs)) =
+    TCross <$> mapM infer xs
+
+
+inferVar :: Variable -> State TypeEnv Type
+inferVar (Variable x n m _) = do
+    -- TODO: This should make the inferred variable need to be a
+    --       function if there is bindings
+    maybeT <- lookupBind (x ++ "_" ++ n ++ replicate m '\'')
+    case maybeT of
+        Just t -> return t
+        Nothing -> do
+            t <- TVar <$> newTypeVar
+            addBind x t
+            return t
+
+
+getSystem :: String -> State TypeEnv (Maybe (Loc System))
 getSystem systemArrow = do
     TypeEnv { systems } <- get
-    case filter (\(Loc _ System { arrow }) -> arrow == systemArrow) systems of
+    case filter (\(Loc loc System { arrow }) -> arrow == systemArrow) systems of
         []      -> return Nothing
-        sys : _ -> return . Just . unLoc $ sys
+        sys : _ -> return (Just sys)
 
 newTypeVar :: State TypeEnv TypeVar
 newTypeVar = do
     tEnv <- get
-    let (tv, nTEnv) = nextTypeVar tEnv
-    put nTEnv
-    return tv
+    let TypeEnv { nextTypeVar_ = TypeVar tv } = tEnv
+    put tEnv { nextTypeVar_ = TypeVar (tv + 1) }
+    return (TypeVar tv)
 
 
 addBind :: String -> Type -> State TypeEnv ()
@@ -132,25 +226,31 @@ applySubst = do
     put tEnv { bindings = fmap (subst subs) bindings }
 
 
-freeTypeVars :: Type -> [TypeVar]
-freeTypeVars TInteger       = []
-freeTypeVars TIdentifier    = []
-freeTypeVars TSyntax        = []
-freeTypeVars (TCustom name) = []
-freeTypeVars (TCross xs)    = concatMap freeTypeVars xs
-freeTypeVars (TUnion xs)    = concatMap freeTypeVars xs
-freeTypeVars (TVar v)       = [v]
-freeTypeVars (TFunc a b)    = freeTypeVars a ++ freeTypeVars b
+typeVars :: Type -> [TypeVar]
+typeVars TInteger       = []
+typeVars TIdentifier    = []
+typeVars TSyntax        = []
+typeVars (TCustom name) = []
+typeVars (TCross xs)    = concatMap typeVars xs
+typeVars (TUnion xs)    = concatMap typeVars xs
+typeVars (TVar v)       = [v]
+typeVars (TFunc a b)    = typeVars a ++ typeVars b
 
 varBind :: TypeVar -> Type -> State TypeEnv TypeResult
 varBind tv t =
-    if tv `elem` freeTypeVars t then
-        return (Left (InifiniteType tv t))
+    if tv `elem` typeVars t then
+        returnError (InifiniteType tv (fakeLoc t))
     else do
         tEnv <- get
         let TypeEnv { subs } = tEnv
         put tEnv { subs = Map.insert tv t subs }
         return (Right t)
+
+
+returnError :: a -> State TypeEnv (Either (Error a) b)
+returnError err = do
+    TypeEnv { contextStack } <- get
+    return $ Left $ Error (contextStack, err)
 
 
 unify :: Type -> Type -> State TypeEnv TypeResult
@@ -183,7 +283,7 @@ unify (TUnion xs) t =
 unify t (TUnion xs) =
     unifyUnion xs xs t
 unify t1 t2 =
-    return (Left (TypeMismatch t1 t2))
+    returnError $ TypeMismatch t1 (fakeLoc t2)
 
 unifyCross :: [(Type, Type)] -> [Type] -> State TypeEnv TypeResult
 unifyCross [] results =
@@ -205,26 +305,4 @@ unifyUnion fullUnion (l : rest) r = do
         (_, _) ->
             unifyUnion fullUnion rest r
 unifyUnion fullUnion [] t =
-    return $ Left (TypeMismatch (TUnion fullUnion) t)
-
-
-infer :: Loc Conf -> State TypeEnv Type
-infer (Loc _ (Conf xs)) =
-    TCross <$> mapM infer xs
-infer (Loc _ (Paren e)) =
-    infer e
-infer (Loc _ (Syntax _)) =
-    return TSyntax
-infer (Loc _ (Var (Variable x n m _))) = do
-    -- TODO: This should make the inferred variable need to be a
-    --       function if there is bindings
-    maybeT <- lookupBind (x ++ "_" ++ n ++ replicate m '\'')
-    case maybeT of
-        Just t -> return t
-        Nothing -> do
-            t <- TVar <$> newTypeVar
-            addBind x t
-            return t
-infer (Loc _ (SyntaxList xs)) =
-    TCross <$> mapM infer xs
-
+    returnError $ TypeMismatch (TUnion fullUnion) (fakeLoc t)
