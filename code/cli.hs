@@ -37,7 +37,7 @@ cli Args {file, latex = False} = do
         Right _  -> putStrLn "Checks passed"
         Left err -> do
           putStrLn $ "Error: " ++ showErrorMessage err
-          putStrLn $ concatMap ("  in " ++) (showStackTrace err)
           putStrLn $ showErrorInSource err src
+          putStrLn $ concatMap ("  in " ++) (showStackTrace err)
 cli Args {file, latex = True} = do
   putStrLn "latex mode"

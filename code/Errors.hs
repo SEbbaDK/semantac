@@ -114,14 +114,14 @@ showStackTrace_ stack =
 contextName :: Context -> String
 contextName (CRule node)                    = "Rule \"" ++ name ++ "\""
   where (Loc loc Rule { name }) = node
-contextName (CCategory node)                = "Category"
-contextName (CSystem node)                  = "System"
-contextName (CSpec node)                    = "Spec"
+contextName (CCategory node)                = "Category Definition"
+contextName (CSystem node)                  = "System Definition"
+contextName (CSpec node)                    = "Type Specification"
 contextName (CPremise node)                 = "Premise"
 contextName (CEquality left right)          = "Equality"
 contextName (CInequality left right)        = "Inequality"
 contextName (CConclusion node)              = "Conclusion"
-contextName (CConf node)                    = "Conf"
+contextName (CConf node)                    = "Configuration"
 contextName (CConfSyntaxList node)          = "ConfSyntaxList"
 contextName (CConfBinding left arrow right) = "ConfBinding"
 
