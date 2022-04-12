@@ -15,17 +15,21 @@ unLoc (Loc _ a) = a
 fakeLoc :: a -> Loc a
 fakeLoc = Loc (("fake", 0, 0), ("fake", 0, 0))
 
-instance (Show a) => Show (Loc a) where
-  show (Loc _ a) = show a
-
 instance Functor Loc where
   fmap f (Loc l v) = Loc l (f v)
 
-showPosCoord (_, l, c) = "<" ++ show l ++ "," ++ show c ++ ">"
-coordFileName (n, _, _) = n
+instance (Show a) => Show (Loc a) where
+  show (Loc _ a) = show a
 
+coordFileName (n, _, _) = n
 underline from to str =
   replicate from ' ' ++ replicate (to - from) '^'
+
+showPosCoord (_, l, c) =
+  "<" ++ show l ++ "," ++ show c ++ ">"
+
+showPos (l, r) =
+  showPosCoord l ++ " .. " ++ showPosCoord r
 
 showLocInSource :: Loc a -> String -> String
 showLocInSource (Loc pos _) src = intercalate "\n" $ fst $ foldr mark ([], 0) $ lines src

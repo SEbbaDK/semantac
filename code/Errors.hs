@@ -3,7 +3,7 @@ module Errors where
 
 import           Ast
 import           Data.List (intercalate)
-import           Loc       (Loc (Loc), Pos, showLocInSource)
+import           Loc       (Loc (Loc), Pos, showLocInSource, showPos)
 import           Types     (Type (TVar), TypeVar)
 
 newtype Error a
@@ -135,14 +135,3 @@ contextLoc (CConfSyntaxList [])                   = error "todo"
 contextLoc (CConfSyntaxList ((Loc l _) : xs))     = l
 contextLoc (CConfBinding (Loc l1 _) _ (Loc l2 _)) = l1
 
-showPos :: Pos -> String
-showPos ((_, x1, y1), (_, x2, y2)) =
-  concat
-    [ show x1
-    , ":"
-    , show y1
-    , ".."
-    , show x2
-    , ":"
-    , show y2
-    ]
