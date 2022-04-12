@@ -100,15 +100,13 @@ checkRule_ domains systems rule =
 -- Premise matches system
 checkPremise :: Loc Premise -> State TypeEnv RuleResult
 checkPremise (Loc l (TPremise trans)) =
-    context (CPremise (Loc l (TPremise trans)))
-    (do
+    context (CPremise (Loc l (TPremise trans))) $
+    do
         let Trans { system } = trans
         sys <- getSystem system
         case sys of
             Nothing  -> returnError (UndefinedArrow (Loc l system))
-            Just sys -> do
-                fmap void (checkTransSystem sys trans)
-                return (Right ()))
+            Just sys -> fmap void (checkTrans sys trans)
 checkPremise (Loc l (EPremise eq)) =
     fmap void $ checkEquality eq
 
@@ -118,9 +116,7 @@ checkConclusion (Loc l trans) = do
     sys <- getSystem system
     case sys of
         Nothing  -> returnError (UndefinedArrow (Loc l system))
-        Just sys -> do
-            fmap void (checkTransSystem sys trans)
-            return (Right ())
+        Just sys -> fmap void (checkTrans sys trans)
 
 
 type TypeResult = Either (Error RuleError) Type
@@ -151,21 +147,19 @@ inferExpr (ECall base params) = do
 
 
 -- Transition matches system
-checkTransSystem :: Loc System -> Trans -> State TypeEnv TypeResult
-checkTransSystem sys Trans { system, before, after } = do
+checkTrans :: Loc System -> Trans -> State TypeEnv TypeResult
+checkTrans sys Trans { system, before, after } = do
     let Loc _ System { arrow, initial, final } = sys
     t1 <- context (CConf before) (infer before)
     applySubst
-    t1 <- context (CConf after) (unify t1 (fromSpec initial))
+    t1 <- context (CConf before) (unify t1 (fromSpec initial))
+
     case t1 of
-        Left e -> return . Left $ e
-        Right t1 -> do
-            t2 <- infer after
-            applySubst
-            t2 <- unify t2 (fromSpec final)
-            case t2 of
-                Left e   -> return . Left $ e
-                Right t2 -> unify t1 t2
+      Left e -> return $ Left e
+      Right _ -> do
+        t2 <- context (CConf after) (infer after)
+        applySubst
+        context (CConf after) (unify t2 (fromSpec final))
 
 infer :: Loc Conf -> State TypeEnv Type
 infer (Loc _ (Conf xs)) =
