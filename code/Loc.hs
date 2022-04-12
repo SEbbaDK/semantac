@@ -48,7 +48,7 @@ dividedNumberedLines divider number lines =
   in first : rest
 
 showPosInSource :: Pos -> String -> String
-showPosInSource pos src = intercalate "\n" $ fst $ foldl mark ([], 1) $ lines src
+showPosInSource pos src = unlines $ fst $ foldl mark ([], 1) $ lines src
   where
     ((_,l1,c1), (_,l2,c2)) = pos
     mark (res, index) line
@@ -59,9 +59,9 @@ showPosInSource pos src = intercalate "\n" $ fst $ foldl mark ([], 1) $ lines sr
       | otherwise                  = (res, index + 1)
         where len = length line
               lined (l1,l2) index c1 c2 line | l1 == l2 =
-                dividedNumberedLines "⎹ " index [ line, underline c1 c2 line ]
+                dividedNumberedLines " | " index [ line, underline c1 c2 line ]
               lined (l1,l2) index c1 c2 line =
-                dividedNumberedLines "⎹ " index [ line ]
+                dividedNumberedLines " | " index [ line ]
 
 
 showLocInSource :: Loc a -> String -> String

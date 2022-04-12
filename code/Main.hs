@@ -34,13 +34,13 @@ cli Args {file, printast, printlatex = False} = do
   src <- readFile file
   case doParse file src of
     Left err ->
-      putErrLn $ "Parsing error\n" ++ errorBundlePretty err
+      putErrLn $ "Parsing Error: " ++ errorBundlePretty err
     Right ast -> do
       if printast then print ast else return ()
       case check ast of
         Right _  -> putStrLn "Checks passed"
         Left err -> do
-          putErrLn $ "Error: " ++ showErrorMessage err
+          putErrLn $ "Type Error: " ++ showErrorMessage err
           putErrLn $ showErrorInSource err src
           putErrLn $ concatMap ("  in " ++) (showStackTrace err)
 cli Args {file, printast, printlatex = True} = do
