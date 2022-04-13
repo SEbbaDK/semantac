@@ -10,7 +10,7 @@ import           Control.Monad       (foldM, join, liftM, void, when)
 import           Control.Monad.Cont  (lift)
 import           Control.Monad.State (MonadState (get, put), StateT (runStateT),
                                       evalState, evalStateT, runState)
-import           Data.List           as List (intercalate, nub, sort)
+import           Data.List           as List (any, find, intercalate, nub, sort)
 import           Data.Map.Strict     as Map (Map, insert, lookup)
 import           Debug.Trace         (trace)
 import           Errors
@@ -131,7 +131,6 @@ checkTrans sys Trans { system, before, after } = do
     let Loc _ System { arrow, initial, final } = sys
     t1 <- context (CConf before) $ do
         t <- infer before
-
         unify t (fromSpec initial)
     t2 <- context (CConf after) $ do
         t <- infer after
@@ -141,9 +140,10 @@ checkTrans sys Trans { system, before, after } = do
 infer :: Monad m => Loc Conf -> TCState m Type
 infer (Loc _ (Conf xs))       = TCross <$> mapM infer xs
 infer (Loc _ (Paren e))       = infer e
-infer (Loc _ (Syntax _))      = return TSyntax
+infer (Loc _ (Syntax _))      = return tSyntax
 infer (Loc _ (Var v))         = inferVar v
-infer (Loc _ (SyntaxList xs)) = TCross <$> mapM infer xs
+infer (Loc _ (SyntaxList xs)) = tSyntax <$ mapM infer xs
+
 
 
 inferVar :: Monad m => Variable -> TCState m Type
@@ -194,14 +194,11 @@ normalizeSubstTc = do
 
 
 typeVars :: Type -> [TypeVar]
-typeVars TInteger       = []
-typeVars TIdentifier    = []
-typeVars TSyntax        = []
-typeVars (TCustom name) = []
-typeVars (TCross xs)    = concatMap typeVars xs
-typeVars (TUnion xs)    = concatMap typeVars xs
-typeVars (TVar v)       = [v]
-typeVars (TFunc a b)    = typeVars a ++ typeVars b
+typeVars (TNamed name) = []
+typeVars (TCross xs)   = concatMap typeVars xs
+typeVars (TUnion xs)   = concatMap typeVars xs
+typeVars (TVar v)      = [v]
+typeVars (TFunc a b)   = typeVars a ++ typeVars b
 
 varBind :: TypeVar -> Type -> TCResult RuleError Type
 varBind tv t =
@@ -219,6 +216,14 @@ returnError err = do
     TypeEnv { contextStack } <- get
     lift (Left (Error (contextStack, err)))
 
+lookupType :: String -> TCResult RuleError Type
+lookupType name = do
+    TypeEnv { domains } <- get
+    case List.find (\c -> name == category (unLoc c)) domains of
+        Just c  -> return $ fromSpec $ spec $ unLoc c
+        Nothing -> return $ TNamed name
+
+
 unify :: Type -> Type -> TCResult RuleError Type
 unify t1 t2 = do
     TypeEnv { subs } <- get
@@ -227,12 +232,16 @@ unify t1 t2 = do
     return t
     where
         unifyBase :: Type -> Type -> TCResult RuleError Type
-        unifyBase TInteger TInteger =
-            return TInteger
-        unifyBase TSyntax TSyntax =
-            return TSyntax
-        unifyBase (TCustom x1) (TCustom x2) | x1 == x2  =
-            return (TCustom x1)
+        unifyBase (TNamed x1) (TNamed x2)  =
+            if x1 == x2 then
+                return (TNamed x1)
+            else do
+                t1 <- lookupType x1
+                t2 <- lookupType x2
+                if t1 == t2 then
+                    return t1
+                else
+                    returnError $ TypeMismatch t1 (fakeLoc t2)
         unifyBase t (TVar tv) =
             varBind tv t
         unifyBase (TVar tv) t =
