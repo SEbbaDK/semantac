@@ -100,7 +100,7 @@ checkConclusion :: Loc Trans -> TCResult RuleError ()
 checkConclusion (Loc l trans) = do
     let Trans { system } = trans
     sys <- getSystem system (UndefinedArrow (Loc l system))
-    void (checkTrans sys trans)
+    checkTrans sys trans
 
 
 
@@ -126,26 +126,24 @@ inferExpr (ECall base params) = do
 
 
 -- Transition matches system
-checkTrans :: Loc System -> Trans -> TCResult RuleError Type
+checkTrans :: Loc System -> Trans -> TCResult RuleError ()
 checkTrans sys Trans { system, before, after } = do
     let Loc _ System { arrow, initial, final } = sys
-    t1 <- context (CConf before) (infer before)
-    normalizeSubst
-    t1 <- context (CConf before) (unify t1 (fromSpec initial))
-    t2 <- context (CConf after) (infer after)
-    normalizeSubst
-    context (CConf after) (unify t2 (fromSpec final))
+    t1 <- context (CConf before) $ do
+        t <- infer before
+
+        unify t (fromSpec initial)
+    t2 <- context (CConf after) $ do
+        t <- infer after
+        unify t (fromSpec final)
+    return ()
 
 infer :: Monad m => Loc Conf -> TCState m Type
-infer (Loc _ (Conf xs)) =
-    TCross <$> mapM infer xs
-infer (Loc _ (Paren e)) =
-    infer e
-infer (Loc _ (Syntax _)) =
-    return TSyntax
-infer (Loc _ (Var v)) = inferVar v
-infer (Loc _ (SyntaxList xs)) =
-    TCross <$> mapM infer xs
+infer (Loc _ (Conf xs))       = TCross <$> mapM infer xs
+infer (Loc _ (Paren e))       = infer e
+infer (Loc _ (Syntax _))      = return TSyntax
+infer (Loc _ (Var v))         = inferVar v
+infer (Loc _ (SyntaxList xs)) = TCross <$> mapM infer xs
 
 
 inferVar :: Monad m => Variable -> TCState m Type
@@ -157,7 +155,9 @@ inferVar (Variable x n m _) = do
         Just t -> return t
         Nothing -> do
             t <- TVar <$> newTypeVar
-            addBind x t
+            tEnv <- get
+            let TypeEnv { bindings } = tEnv
+            put tEnv { bindings = Map.insert x t bindings }
             return t
 
 getSystem :: String -> RuleError -> TCResult RuleError (Loc System)
@@ -175,12 +175,6 @@ newTypeVar = do
     return (TypeVar tv)
 
 
-addBind :: Monad m => String -> Type -> TCState m ()
-addBind name t = do
-    tEnv <- get
-    let TypeEnv { bindings } = tEnv
-    put tEnv { bindings = Map.insert name t bindings }
-
 lookupBind :: Monad m => String -> TCState m (Maybe Type)
 lookupBind name = do
     TypeEnv { bindings } <- get
@@ -192,15 +186,11 @@ Normalizes the substitutions. All values of the substitution are mapped using `s
 
 If a Type contains the TypeVar it is keyed on, then this will not terminate. We ensure this does not happen in the `varBind` function.
 -}
-normalizeSubst :: Monad m => TCState m ()
-normalizeSubst = do
+normalizeSubstTc :: TCResult e ()
+normalizeSubstTc = do
     tEnv <- get
-    let TypeEnv { bindings, subs } = tEnv
-    let nextSubs = fmap (subst subs) subs
-    Control.Monad.when (nextSubs /= subs) $
-        do
-            put tEnv { subs = nextSubs }
-            normalizeSubst
+    let TypeEnv { subs } = tEnv
+    put tEnv { subs = normalizeSubst subs }
 
 
 typeVars :: Type -> [TypeVar]
@@ -229,52 +219,61 @@ returnError err = do
     TypeEnv { contextStack } <- get
     lift (Left (Error (contextStack, err)))
 
-
 unify :: Type -> Type -> TCResult RuleError Type
-unify TInteger TInteger =
-    return TInteger
-unify TSyntax TSyntax =
-    return TSyntax
-unify (TCustom x1) (TCustom x2) | x1 == x2  =
-    return (TCustom x1)
-unify t (TVar tv) =
-    varBind tv t
-unify (TVar tv) t =
-    varBind tv t
-unify (TCross t1) (TCross t2) | length t1 == length t2  =
-    unifyCross (zip t1 t2) []
-unify (TFunc a1 b1) (TFunc a2 b2) = do
-    a <- unify a1 a2
-    normalizeSubst
-    b <- unify b1 b2
-    normalizeSubst
-    return (TFunc a b)
-unify (TUnion ls) (TUnion rs) =
-    let nextUnion = TUnion (nub (List.sort (ls ++ rs))) in
-    return nextUnion
-unify (TUnion xs) t =
-    unifyUnion xs xs t
-unify t (TUnion xs) =
-    unifyUnion xs xs t
-unify t1 t2 =
-    returnError $ TypeMismatch t1 (fakeLoc t2)
+unify t1 t2 = do
+    TypeEnv { subs } <- get
+    t <- unifyBase (subst subs t1) (subst subs t2)
+    normalizeSubstTc
+    return t
+    where
+        unifyBase :: Type -> Type -> TCResult RuleError Type
+        unifyBase TInteger TInteger =
+            return TInteger
+        unifyBase TSyntax TSyntax =
+            return TSyntax
+        unifyBase (TCustom x1) (TCustom x2) | x1 == x2  =
+            return (TCustom x1)
+        unifyBase t (TVar tv) =
+            varBind tv t
+        unifyBase (TVar tv) t =
+            varBind tv t
+        unifyBase (TCross [t1]) t2 = unifyBase t1 t2
+        unifyBase t1 (TCross [t2]) = unifyBase t1 t2
+        unifyBase (TCross t1) (TCross t2) | length t1 == length t2  =
+            trace (show (TCross t1) ++ show (TCross t2)) $
+            unifyCross (zip t1 t2) []
+        unifyBase (TFunc a1 b1) (TFunc a2 b2) = do
+            a <- unify a1 a2
+            b <- unify b1 b2
+            return (TFunc a b)
+        unifyBase (TUnion [l]) rs = unifyBase l rs
+        unifyBase ls (TUnion [r]) = unifyBase ls r
+        unifyBase (TUnion ls) (TUnion rs) =
+            let nextUnion = TUnion (nub (List.sort (ls ++ rs))) in
+            return nextUnion
+        unifyBase (TUnion xs) t =
+            unifyUnion xs xs t
+        unifyBase t (TUnion xs) =
+            unifyUnion xs xs t
+        unifyBase t1 t2 =
+            returnError $ TypeMismatch t1 (fakeLoc t2)
 
-unifyCross :: [(Type, Type)] -> [Type] -> TCResult RuleError Type
-unifyCross [] results =
-    (return . TCross . reverse) results
-unifyCross ((t1_, t2_) : ts_) results = do
-    t <- unify t1_ t2_
-    unifyCross ts_ (t : results)
+        unifyCross :: [(Type, Type)] -> [Type] -> TCResult RuleError Type
+        unifyCross [] results =
+            (return . TCross . reverse) results
+        unifyCross ((t1_, t2_) : ts_) results = do
+            t <- unify t1_ t2_
+            unifyCross ts_ (t : results)
 
-unifyUnion :: [Type] -> [Type] -> Type -> TCResult RuleError Type
-unifyUnion fullUnion (l : rest) r = do
-    env <- get
-    case runStateT (unify l r) env of
-        (Right (t, nextEnv)) -> do
-            put nextEnv
-            normalizeSubst
-            return t
-        (Left er) ->
-            unifyUnion fullUnion rest r
-unifyUnion fullUnion [] t =
-    returnError $ TypeMismatch (TUnion fullUnion) (fakeLoc t)
+        unifyUnion :: [Type] -> [Type] -> Type -> TCResult RuleError Type
+        unifyUnion fullUnion (l : rest) r = do
+            env <- get
+            case runStateT (unify l r) env of
+                (Right (t, nextEnv)) -> do
+                    put nextEnv
+                    normalizeSubstTc
+                    return t
+                (Left er) ->
+                    unifyUnion fullUnion rest r
+        unifyUnion fullUnion [] t =
+            returnError $ TypeMismatch (TUnion fullUnion) (fakeLoc t)

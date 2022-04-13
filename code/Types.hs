@@ -65,3 +65,17 @@ subst subs (TUnion xs) = TUnion (fmap (subst subs) xs)
 subst subs (TFunc a b) = TFunc (subst subs a) (subst subs b)
 subst subs (TVar tv)   = fromMaybe (TVar tv) (Map.lookup tv subs)
 
+
+
+{-
+Normalizes the substitutions. All values of the substitution are mapped using `subst` recursively until a fixpoint is reached.
+
+If a Type contains the TypeVar it is keyed on, then this will not terminate. We ensure this does not happen in the `varBind` function.
+-}
+normalizeSubst :: Substitutions -> Substitutions
+normalizeSubst subs =
+    let nextSubs = fmap (subst subs) subs in
+    if nextSubs /= subs then
+        normalizeSubst nextSubs
+    else
+        subs
