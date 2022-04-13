@@ -6,13 +6,12 @@ module TypeChecker where
 
 import           Ast
 import           Control.Arrow       (left)
-import           Control.Monad       (foldM, foldM_, join, liftM, void)
+import           Control.Monad       (foldM, join, liftM, void, when)
 import           Control.Monad.Cont  (lift)
 import           Control.Monad.State (MonadState (get, put), StateT (runStateT),
                                       evalState, evalStateT, runState)
 import           Data.List           as List (intercalate, nub, sort)
 import           Data.Map.Strict     as Map (Map, insert, lookup)
-import           Data.Maybe          (fromMaybe)
 import           Debug.Trace         (trace)
 import           Errors
 import           Loc
@@ -77,11 +76,7 @@ context ctx s = do
 
 checkRule :: [Loc Category] -> [Loc System] -> Loc Rule -> Either (Error RuleError) ()
 checkRule domains systems rule =
-    let
-        tEnv = newTypeEnv domains systems (CRule rule)
-
-        Rule {base, premises, properties} = unLoc rule
-    in
+    let tEnv = newTypeEnv domains systems (CRule rule) in
     evalStateT (checkRule_ domains systems rule) tEnv
 
 checkRule_ :: [Loc Category] -> [Loc System] -> Loc Rule -> TCResult RuleError ()
@@ -135,10 +130,10 @@ checkTrans :: Loc System -> Trans -> TCResult RuleError Type
 checkTrans sys Trans { system, before, after } = do
     let Loc _ System { arrow, initial, final } = sys
     t1 <- context (CConf before) (infer before)
-    applySubst
+    normalizeSubst
     t1 <- context (CConf before) (unify t1 (fromSpec initial))
     t2 <- context (CConf after) (infer after)
-    applySubst
+    normalizeSubst
     context (CConf after) (unify t2 (fromSpec final))
 
 infer :: Monad m => Loc Conf -> TCState m Type
@@ -164,7 +159,6 @@ inferVar (Variable x n m _) = do
             t <- TVar <$> newTypeVar
             addBind x t
             return t
-
 
 getSystem :: String -> RuleError -> TCResult RuleError (Loc System)
 getSystem systemArrow err = do
@@ -193,11 +187,20 @@ lookupBind name = do
     return (Map.lookup name bindings)
 
 
-applySubst :: Monad m => TCState m ()
-applySubst = do
+{-
+Normalizes the substitutions. All values of the substitution are mapped using `subst` recursively until a fixpoint is reached.
+
+If a Type contains the TypeVar it is keyed on, then this will not terminate. We ensure this does not happen in the `varBind` function.
+-}
+normalizeSubst :: Monad m => TCState m ()
+normalizeSubst = do
     tEnv <- get
     let TypeEnv { bindings, subs } = tEnv
-    put tEnv { bindings = fmap (subst subs) bindings }
+    let nextSubs = fmap (subst subs) subs
+    Control.Monad.when (nextSubs /= subs) $
+        do
+            put tEnv { subs = nextSubs }
+            normalizeSubst
 
 
 typeVars :: Type -> [TypeVar]
@@ -212,7 +215,7 @@ typeVars (TFunc a b)    = typeVars a ++ typeVars b
 
 varBind :: TypeVar -> Type -> TCResult RuleError Type
 varBind tv t =
-    if tv `elem` typeVars t then do
+    if tv `elem` typeVars t then
         returnError (InifiniteType tv (fakeLoc t))
     else do
         tEnv <- get
@@ -242,9 +245,9 @@ unify (TCross t1) (TCross t2) | length t1 == length t2  =
     unifyCross (zip t1 t2) []
 unify (TFunc a1 b1) (TFunc a2 b2) = do
     a <- unify a1 a2
-    applySubst
+    normalizeSubst
     b <- unify b1 b2
-    applySubst
+    normalizeSubst
     return (TFunc a b)
 unify (TUnion ls) (TUnion rs) =
     let nextUnion = TUnion (nub (List.sort (ls ++ rs))) in
@@ -269,7 +272,7 @@ unifyUnion fullUnion (l : rest) r = do
     case runStateT (unify l r) env of
         (Right (t, nextEnv)) -> do
             put nextEnv
-            applySubst
+            normalizeSubst
             return t
         (Left er) ->
             unifyUnion fullUnion rest r
