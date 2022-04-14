@@ -4,6 +4,7 @@ import           Data.List  (intercalate)
 import           Data.Text  (splitOn)
 import           Data.Tuple (fst)
 
+
 type PosCoord = (String, Int, Int)
 type Pos = (PosCoord, PosCoord)
 data Loc a

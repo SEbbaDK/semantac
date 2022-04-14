@@ -30,22 +30,22 @@ data RuleError
   | InifiniteType TypeVar (Loc Type)
   | UndefinedVar (Loc String)
   | UndefinedArrow (Loc String)
-  | ConfTypeMismatch (Loc Type) (Loc String) (Loc Type)
+  | ConfTypeMismatch (Loc Type) (Loc System)
 
 type Lines = [String]
 
-showErrorMessage :: Error TopError -> String
-showErrorMessage (Error (ctx, e)) = unlines (showTopErrorLines e)
+showErrorMessage :: String -> Error TopError -> String
+showErrorMessage src (Error (ctx, e)) = unlines (showTopErrorLines src e)
 
 showErrorInSource (Error (ctx, _)) src =
   let p = contextPos $ head ctx
   in showPosInSource p src
 
-showTopErrorLines :: TopError -> Lines
-showTopErrorLines (CategoryError e)        = showCategoryError e
-showTopErrorLines (SystemError e)          = showSystemError e
-showTopErrorLines (RuleError ruleName e)   = showRuleError e
-showTopErrorLines (MultiRuleDefinitions e) = ["todo"]
+showTopErrorLines :: String -> TopError -> Lines
+showTopErrorLines src (CategoryError e)        = showCategoryError e
+showTopErrorLines src (SystemError e)          = showSystemError e
+showTopErrorLines src (RuleError ruleName e)   = showRuleError src e
+showTopErrorLines src (MultiRuleDefinitions e) = ["todo"]
 
 showCategoryError :: CategoryError -> Lines
 showCategoryError _ = ["todo"]
@@ -53,29 +53,36 @@ showCategoryError _ = ["todo"]
 showSystemError :: SystemError -> Lines
 showSystemError _ = ["todo"]
 
-showRuleError :: RuleError -> Lines
-showRuleError (TypeMismatch t1 t2) =
+showRuleError :: String -> RuleError -> Lines
+showRuleError src (TypeMismatch t1 t2) =
   [ "Type mismatch at " ++ showPos (pos t2)
-  , "  Expected " ++ show t2
-  , "  Found    " ++ show t1
+  , "  Expected: " ++ show t2
+  , "  Received: " ++ show t1
   ]
-showRuleError (InifiniteType tv t) =
+showRuleError src (InifiniteType tv t) =
   -- This message is kinda impossible to understand I think.
   -- Failure of the "occurs check" is the terminology in the literature for this type of error.
   [ "Infinite type. "
   , "  Type variable " ++ show (TVar tv) ++ " occurs in " ++ show t
   ]
-showRuleError (UndefinedVar (Loc _ name)) =
+showRuleError src (UndefinedVar (Loc _ name)) =
   [ "Use of undefined variable \"" ++ name ++ "\""
   ]
-showRuleError (UndefinedArrow (Loc _ arrowName)) =
+showRuleError src (UndefinedArrow (Loc _ arrowName)) =
   [ "Use of undefined arrow: " ++ arrowName
   ]
-showRuleError (ConfTypeMismatch left arrow right) =
-  [ "The type of the configuration does not match the type of the transition used."
-  , "  Expected TODO"
-  , "  Found    " ++ show left ++ " " ++ show arrow ++ " " ++ show right
-  ]
+showRuleError src (ConfTypeMismatch (Loc usedPos used) (Loc sysPos sys)) =
+  let
+    System { arrow, initial, final } = sys
+  in
+    [ "The type of the configuration at " ++ showPos usedPos ++ " does not match the type given in the definition of the transition system.\n"
+    , "  The type of the configuration is: " ++ show used
+    , "  Configuration at:"
+    , showPosInSource usedPos src
+    , "  System specification: " ++ show sys
+    , "  Defined at:"
+    , showPosInSource sysPos src
+    ]
 
 
 data Context

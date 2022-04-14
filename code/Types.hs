@@ -27,8 +27,8 @@ instance Show Type where
     show TIdentifier    = "Id"
     show TSyntax        = "Syntax"
     show (TCustom name) = name
-    show (TCross xs)    = "<" ++ intercalate " , " (fmap show xs) ++ ">"
-    show (TUnion xs)    = "(" ++ intercalate " | " (fmap show xs) ++ ")"
+    show (TCross xs)    = intercalate " ⨯ " (fmap show xs)
+    show (TUnion xs)    = intercalate " ∪ " (fmap show xs)
     show (TFunc a b)    = show a ++ " → " ++ show b
     show (TVar tv)      = show tv
 

@@ -52,11 +52,11 @@ systemParser :: Parser System
 systemParser = do
   try (string "system")
   ws
-  initial <- specParser
+  initial <- locced specParser
   ws
   system <- systemNameParser
   ws
-  final <- specParser
+  final <- locced specParser
   return $ System
     { arrow = system
     , initial = initial

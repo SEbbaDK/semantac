@@ -8,8 +8,9 @@ import           Ast
 import           Control.Arrow       (left)
 import           Control.Monad       (foldM, foldM_, join, liftM, void)
 import           Control.Monad.Cont  (lift)
-import           Control.Monad.State (MonadState (get, put), StateT (runStateT),
-                                      evalState, evalStateT, runState)
+import           Control.Monad.State (MonadState (get, put)
+                                     , StateT (runStateT)
+                                     , evalStateT, mapStateT)
 import           Data.List           as List (intercalate, nub, sort)
 import           Data.Map.Strict     as Map (Map, insert, lookup)
 import           Data.Maybe          (fromMaybe)
@@ -133,13 +134,20 @@ inferExpr (ECall base params) = do
 -- Transition matches system
 checkTrans :: Loc System -> Trans -> TCResult RuleError Type
 checkTrans sys Trans { system, before, after } = do
-    let Loc _ System { arrow, initial, final } = sys
+    let Loc l System { arrow, initial, final } = sys
+    let (Loc initialLoc initialSpec) = initial
+    let (Loc finalLoc finalSpec) = final
     t1 <- context (CConf before) (infer before)
     applySubst
-    t1 <- context (CConf before) (unify t1 (fromSpec initial))
+    t1 <- context (CConf before) (mapError (mismatchMap before) $ unify t1 $ fromSpec initialSpec)
     t2 <- context (CConf after) (infer after)
     applySubst
-    context (CConf after) (unify t2 (fromSpec final))
+    context (CConf after) (unify t2 $ fromSpec finalSpec) -- TODO: Map this too
+      where
+        mismatchMap :: Loc a -> Error RuleError -> Error RuleError
+        mismatchMap (Loc p _) (Error (stack, TypeMismatch t1 t2)) =
+            Error (stack, ConfTypeMismatch (Loc p t1) sys)
+        mismatchMap _ e = e
 
 infer :: Monad m => Loc Conf -> TCState m Type
 infer (Loc _ (Conf xs)) =
@@ -220,6 +228,8 @@ varBind tv t =
         put tEnv { subs = Map.insert tv t subs }
         return t
 
+mapError :: (Error a -> Error b) -> TCResult a t -> TCResult b t
+mapError f = mapStateT (left f)
 
 returnError :: a -> TCState (Either (Error a)) b
 returnError err = do

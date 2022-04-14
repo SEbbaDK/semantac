@@ -8,9 +8,9 @@ import           Options.Applicative
 import           Parser                (doParse)
 import           Text.Megaparsec.Error (errorBundlePretty)
 import           TypeChecker           (check)
-import           System.IO             (stderr, hPutStrLn)
+import           System.IO             (stderr, hPutStr)
 
-putErrLn = hPutStrLn stderr
+putErr = hPutStr stderr
 
 data Args
   = Args
@@ -34,14 +34,14 @@ cli Args {file, printast, printlatex = False} = do
   src <- readFile file
   case doParse file src of
     Left err ->
-      putErrLn $ "Parsing Error: " ++ errorBundlePretty err
+      putErr $ "Parsing Error: " ++ errorBundlePretty err
     Right ast -> do
       if printast then print ast else return ()
       case check ast of
         Right _  -> putStrLn "Checks passed"
         Left err -> do
-          putErrLn $ "Type Error: " ++ showErrorMessage err
-          putErrLn $ showErrorInSource err src
-          putErrLn $ concatMap ("  in " ++) (showStackTrace err)
+          putErr $ "Type Error: " ++ showErrorMessage src err
+          -- putErrLn $ showErrorInSource err src
+          putErr $ concatMap ("  in " ++) (showStackTrace err)
 cli Args {file, printast, printlatex = True} = do
   putStrLn "latex mode"

@@ -22,8 +22,8 @@ data Category
 data System
   = System
     { arrow   :: String
-    , initial :: Spec
-    , final   :: Spec
+    , initial :: Loc Spec
+    , final   :: Loc Spec
     }
 
 instance Show Top where
