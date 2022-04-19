@@ -54,22 +54,26 @@ showSystemError :: SystemError -> Lines
 showSystemError _ = ["todo"]
 
 showRuleError :: String -> RuleError -> Lines
-showRuleError src (TypeMismatch t1 t2) =
-  [ "Type mismatch at " ++ showPos (pos t2)
+showRuleError src (TypeMismatch t1 (Loc p t2)) =
+  [ "Type mismatch at " ++ showPos p
+  , showPosInSource p src
   , "  Expected: " ++ show t2
   , "  Received: " ++ show t1
   ]
-showRuleError src (InifiniteType tv t) =
+showRuleError src (InifiniteType tv (Loc p t)) =
   -- This message is kinda impossible to understand I think.
   -- Failure of the "occurs check" is the terminology in the literature for this type of error.
   [ "Infinite type. "
   , "  Type variable " ++ show (TVar tv) ++ " occurs in " ++ show t
+  , showPosInSource p src
   ]
-showRuleError src (UndefinedVar (Loc _ name)) =
+showRuleError src (UndefinedVar (Loc p name)) =
   [ "Use of undefined variable \"" ++ name ++ "\""
+  , showPosInSource p src
   ]
-showRuleError src (UndefinedArrow (Loc _ arrowName)) =
+showRuleError src (UndefinedArrow (Loc p arrowName)) =
   [ "Use of undefined arrow: " ++ arrowName
+  , showPosInSource p src
   ]
 showRuleError src (ConfTypeMismatch (Loc usedPos used) (Loc sysPos sys)) =
   let
@@ -77,11 +81,10 @@ showRuleError src (ConfTypeMismatch (Loc usedPos used) (Loc sysPos sys)) =
   in
     [ "The type of the configuration at " ++ showPos usedPos ++ " does not match the type given in the definition of the transition system.\n"
     , "  The type of the configuration is: " ++ show used
-    , "  Configuration at:"
     , showPosInSource usedPos src
     , "  System specification: " ++ show sys
-    , "  Defined at:"
     , showPosInSource sysPos src
+    , "These two types should match, but they do not.\n"
     ]
 
 
