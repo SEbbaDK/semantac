@@ -3,7 +3,7 @@ module Errors where
 
 import           Ast
 import           Data.List (intercalate)
-import           Loc       (Loc (Loc), Pos, showPosInSource, showPos, pos)
+import           Loc       (Loc (Loc), Pos, pos, showPos, showPosInSource)
 import           Types     (Type (TVar), TypeVar)
 
 newtype Error a
@@ -27,6 +27,9 @@ data SystemError = SysError
 
 data RuleError
   = TypeMismatch Type (Loc Type)
+  -- I'm not sure if the InfiniteType error is possible given that all
+  -- functions have to be explicitly declared upfront with their type
+  -- signatures.
   | InifiniteType TypeVar (Loc Type)
   | UndefinedVar (Loc String)
   | UndefinedArrow (Loc String)
@@ -37,6 +40,7 @@ type Lines = [String]
 showErrorMessage :: String -> Error TopError -> String
 showErrorMessage src (Error (ctx, e)) = unlines (showTopErrorLines src e)
 
+showErrorInSource :: Error a -> String -> String
 showErrorInSource (Error (ctx, _)) src =
   let p = contextPos $ head ctx
   in showPosInSource p src

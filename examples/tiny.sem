@@ -16,14 +16,5 @@ rule IfOne
 <e1> =>e <i1>
 <e1, x1> =>e <e1', x1'>
 -----------------------------------------------------
-<"if" e1 "then" e2 "else" e3, x> => <"if" e1' "then" e2 "else" e3, x1'>
+<"if" e1 "then" e2 "else" e3, x> =>e <"if" e1' "then" e2 "else" e3, x1'>
 
-
-rule IfTwo
----
-<"if" "True" "then" b "else" c, x> => <b, x>
-
-
-rule IfThree
-----
-<"if" "False" "then" b "else" c, x> => <c, x>

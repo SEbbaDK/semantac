@@ -1,4 +1,3 @@
-{-# LANGUAGE NamedFieldPuns #-}
 module Types where
 
 import           Ast
@@ -12,6 +11,7 @@ import           Loc
 
 data Type
   = TNamed String
+  | TCategory String
   | TCross [Type]
   | TUnion [Type]
   | TFunc Type Type
@@ -20,6 +20,7 @@ data Type
 
 instance Show Type where
     show (TNamed name) = name
+    show (TCategory name) = name
     show (TCross xs)    = intercalate " ⨯ " (fmap show xs)
     show (TUnion xs)    = intercalate " ∪ " (fmap show xs)
     show (TFunc a b)    = show a ++ " → " ++ show b
@@ -36,13 +37,13 @@ fromSpec (Func a b) = TFunc (fromSpec a) (fromSpec b)
 
 
 tSyntax :: Type
-tSyntax = TNamed "Syntax"
+tSyntax = TCategory "Syntax"
 
 tIdentifier :: Type
-tIdentifier = TNamed "Id"
+tIdentifier = TCategory "Id"
 
 tIntger :: Type
-tIntger = TNamed "Int"
+tIntger = TCategory "Int"
 
 
 newtype TypeVar
@@ -50,7 +51,7 @@ newtype TypeVar
   deriving (Eq, Ord)
 
 instance Show TypeVar where
-    show (TypeVar v) = "~" ++ reverse (intToAlphaRev v)
+    show (TypeVar v) = "#" ++ reverse (intToAlphaRev v)
         where
             intToAlphaRev n | n <= 0 = []
             intToAlphaRev n =
@@ -61,6 +62,7 @@ type Substitutions = Map TypeVar Type
 
 subst :: Substitutions -> Type -> Type
 subst subs (TNamed x)  = TNamed x
+subst subs (TCategory x)  = TCategory x
 subst subs (TCross xs) = TCross (fmap (subst subs) xs)
 subst subs (TUnion xs) = TUnion (fmap (subst subs) xs)
 subst subs (TFunc a b) = TFunc (subst subs a) (subst subs b)
