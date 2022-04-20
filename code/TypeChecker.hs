@@ -6,27 +6,34 @@ module TypeChecker where
 
 import           Ast
 import           Control.Arrow       (left)
-import           Control.Monad       (foldM, join, liftM, void, when, unless)
+import           Control.Monad       (foldM, join, liftM, unless, void, when)
 import           Control.Monad.Cont  (lift)
 import           Control.Monad.State (MonadState (get, put), StateT (runStateT),
-                                      evalStateT, mapStateT)
+                                      evalStateT, execStateT, mapStateT)
+import           Data.Bifunctor      (Bifunctor (bimap))
 import           Data.List           as List (any, find, intercalate, nub, sort)
-import           Data.Map.Strict     as Map (Map, insert, lookup)
+import           Data.Map.Strict     as Map (Map, empty, insert, lookup)
 import           Debug.Trace         (trace)
 import           Errors
 import           Loc
 import           Types
 
-type TopResult = Either (Error TopError) ()
+type TopResult = Either (Error TopError) CheckResult
+
+type CheckResult = Map String (Map String Type)
 
 check :: Top -> TopResult
 check (Top declarations domains systems rules) =
     let
-        init = Right ()
+        init :: TopResult
+        init = Right Map.empty
 
         f :: TopResult -> Loc Rule -> TopResult
-        f (Right x) rule =
-            left (fmap (RuleError ruleName)) (checkRule domains systems rule)
+        f (Right allBinds) rule =
+            bimap
+                (fmap (RuleError ruleName))
+                (\binds -> Map.insert ruleName binds allBinds)
+                (checkRule domains systems rule)
             where Rule { name = ruleName } = unLoc rule
         f (Left x) rule = Left x
     in
@@ -74,10 +81,10 @@ context ctx s = do
                 []               -> return ()
                 _ : nextCtxStack -> put cCtx { contextStack = nextCtxStack }
 
-checkRule :: [Loc Category] -> [Loc System] -> Loc Rule -> Either (Error RuleError) ()
+checkRule :: [Loc Category] -> [Loc System] -> Loc Rule -> Either (Error RuleError) (Map String Type)
 checkRule domains systems rule =
     let tEnv = newTypeEnv domains systems (CRule rule) in
-    evalStateT (checkRule_ domains systems rule) tEnv
+    bindings <$> execStateT (checkRule_ domains systems rule) tEnv
 
 checkRule_ :: [Loc Category] -> [Loc System] -> Loc Rule -> TCResult RuleError ()
 checkRule_ domains systems rule = do
@@ -146,7 +153,7 @@ checkTrans sys Trans { system, before, after } = do
             TypeEnv { subs } <- get
             case subst subs t of
                 TNamed x -> lookupType x
-                t -> return t
+                t        -> return t
 
 infer :: Monad m => Loc Conf -> TCState m Type
 infer (Loc _ (Conf xs))       = TCross <$> mapM infer xs
@@ -193,12 +200,12 @@ lookupBind name = do
 
 
 typeVars :: Type -> [TypeVar]
-typeVars (TNamed name) = []
+typeVars (TNamed name)    = []
 typeVars (TCategory name) = []
-typeVars (TCross xs)   = concatMap typeVars xs
-typeVars (TUnion xs)   = concatMap typeVars xs
-typeVars (TVar v)      = [v]
-typeVars (TFunc a b)   = typeVars a ++ typeVars b
+typeVars (TCross xs)      = concatMap typeVars xs
+typeVars (TUnion xs)      = concatMap typeVars xs
+typeVars (TVar v)         = [v]
+typeVars (TFunc a b)      = typeVars a ++ typeVars b
 
 varBind :: TypeVar -> Type -> TCResult RuleError Type
 varBind tv t =
@@ -277,7 +284,7 @@ unify t1 t2 = do
 
         -- TODO: What kind of errors can be returned from unify? isn't it just InfiniteType?
         --       This TypeMismatch error would then be misleading, should we just return the
-        --       first sub-error?
+        --       first sub-error? Can an InifiniteType error even occur?
         unifyUnion :: [Type] -> [Type] -> Type -> TCResult RuleError Type
         unifyUnion fullUnion (l : rest) r = do
             env <- get
