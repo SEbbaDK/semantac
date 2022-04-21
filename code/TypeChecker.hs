@@ -6,12 +6,12 @@ module TypeChecker where
 
 import           Ast
 import           Control.Arrow       (left)
-import           Control.Monad       (foldM, join, liftM, unless, void, when)
+import           Control.Monad       (foldM, unless, void)
 import           Control.Monad.Cont  (lift)
 import           Control.Monad.State (MonadState (get, put), StateT (runStateT),
                                       evalStateT, execStateT, mapStateT)
 import           Data.Bifunctor      (Bifunctor (bimap))
-import           Data.List           as List (any, find, intercalate, nub, sort)
+import           Data.List           as List (any, find, nub, sort)
 import           Data.Map.Strict     as Map (Map, empty, insert, lookup)
 import           Debug.Trace         (trace)
 import           Errors
@@ -39,10 +39,10 @@ check (Top declarations domains systems rules) =
     in
     foldl f init rules
 
-type TCResult e a = StateT TypeEnv (Either (Error e)) a
-type TCState m a = StateT TypeEnv m a
+type TCResult e a = StateT TCState (Either (Error e)) a
+type TypeChecker m a = StateT TCState m a
 
-data TypeEnv
+data TCState
   = TypeEnv
     { nextTypeVar_ :: TypeVar
     , subs         :: Substitutions
@@ -51,7 +51,7 @@ data TypeEnv
     , systems      :: [Loc System]
     , contextStack :: ContextStack
     }
-newTypeEnv :: [Loc Category] -> [Loc System] -> Context -> TypeEnv
+newTypeEnv :: [Loc Category] -> [Loc System] -> Context -> TCState
 newTypeEnv domains systems context = TypeEnv
     { nextTypeVar_ = TypeVar 1
     , subs = mempty
@@ -61,19 +61,19 @@ newTypeEnv domains systems context = TypeEnv
     , contextStack = [context]
     }
 
-context :: Monad m => Context -> TCState m a -> TCState m a
+context :: Monad m => Context -> TypeChecker m a -> TypeChecker m a
 context ctx s = do
     pushContext
     res <- s
     popContext
     return res
     where
-        pushContext :: Monad m => TCState m ()
+        pushContext :: Monad m => TypeChecker m ()
         pushContext = do
             cCtx <- get
             let TypeEnv { contextStack } = cCtx
             put cCtx { contextStack = ctx : contextStack }
-        popContext :: Monad m => TCState m ()
+        popContext :: Monad m => TypeChecker m ()
         popContext = do
             cCtx <- get
             let TypeEnv { contextStack } = cCtx
@@ -155,7 +155,7 @@ checkTrans sys Trans { system, before, after } = do
                 TNamed x -> lookupType x
                 t        -> return t
 
-infer :: Monad m => Loc Conf -> TCState m Type
+infer :: Monad m => Loc Conf -> TypeChecker m Type
 infer (Loc _ (Conf xs))       = TCross <$> mapM infer xs
 infer (Loc _ (Paren e))       = infer e
 infer (Loc _ (Syntax _))      = return tSyntax
@@ -164,7 +164,7 @@ infer (Loc _ (SyntaxList xs)) = tSyntax <$ mapM infer xs
 
 
 
-inferVar :: Monad m => Variable -> TCState m Type
+inferVar :: Monad m => Variable -> TypeChecker m Type
 inferVar (Variable x n m _) = do
     -- TODO: This should make the inferred variable need to be a
     --       function if there is bindings
@@ -185,7 +185,7 @@ getSystem systemArrow err = do
         []      -> returnError err
         sys : _ -> return sys
 
-newTypeVar :: Monad m => TCState m TypeVar
+newTypeVar :: Monad m => TypeChecker m TypeVar
 newTypeVar = do
     tEnv <- get
     let TypeEnv { nextTypeVar_ = TypeVar tv } = tEnv
@@ -193,7 +193,7 @@ newTypeVar = do
     return (TypeVar tv)
 
 
-lookupBind :: Monad m => String -> TCState m (Maybe Type)
+lookupBind :: Monad m => String -> TypeChecker m (Maybe Type)
 lookupBind name = do
     TypeEnv { bindings } <- get
     return (Map.lookup name bindings)
@@ -220,7 +220,7 @@ varBind tv t =
 mapError :: (Error a -> Error b) -> TCResult a t -> TCResult b t
 mapError f = mapStateT (left f)
 
-returnError :: a -> TCState (Either (Error a)) b
+returnError :: a -> TypeChecker (Either (Error a)) b
 returnError err = do
     TypeEnv { contextStack } <- get
     lift (Left (Error (contextStack, err)))
