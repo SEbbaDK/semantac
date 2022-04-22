@@ -1,0 +1,31 @@
+```
+system Int -> Id
+
+a -> b
+b -> c
+------
+a -> c
+```
+
+order 1:
+    infer "b -> c"
+    b:Any, c:Any
+    unify
+    b:Int, c:Id
+    check "->" passes
+    infer "a -> b"
+    a:Any, b:Int
+    unify
+    a:Int, b:(Int U Id)
+    check "->" passes
+order 2:
+    infer "a -> b"
+    a:Any, b:Any
+    unify
+    a:Int, b:Id
+    check "->" passes
+    infer "b -> c"
+    b:Id, c:Any
+    unify
+    b:(Id U Int), c:Id
+    check "->" fails
