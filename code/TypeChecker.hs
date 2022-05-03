@@ -25,9 +25,6 @@ type CheckResult = Map String (Map String Type)
 check :: Top -> TopResult
 check (Top declarations domains systems rules) =
     let
-        init :: TopResult
-        init = Right Map.empty
-
         f :: TopResult -> Loc Rule -> TopResult
         f (Right allBinds) rule =
             bimap
@@ -37,7 +34,7 @@ check (Top declarations domains systems rules) =
             where Rule { name = ruleName } = unLoc rule
         f (Left x) rule = Left x
     in
-    foldl f init rules
+    foldl f (Right mempty) rules
 
 type TCResult e a = StateT TCState (Either (Error e)) a
 type TypeChecker m a = StateT TCState m a
@@ -50,15 +47,6 @@ data TCState
     , domains      :: [Loc Category]
     , systems      :: [Loc System]
     , contextStack :: ContextStack
-    }
-newTypeEnv :: [Loc Category] -> [Loc System] -> Context -> TCState
-newTypeEnv domains systems context = TypeEnv
-    { nextTypeVar_ = TypeVar 1
-    , subs = mempty
-    , bindings = mempty
-    , domains
-    , systems
-    , contextStack = [context]
     }
 
 context :: Monad m => Context -> TypeChecker m a -> TypeChecker m a
@@ -83,7 +71,7 @@ context ctx s = do
 
 checkRule :: [Loc Category] -> [Loc System] -> Loc Rule -> Either (Error RuleError) (Map String Type)
 checkRule domains systems rule =
-    let tEnv = newTypeEnv domains systems (CRule rule) in
+    let tEnv = TypeEnv (TypeVar 1) mempty mempty domains systems [CRule rule] in
     bindings <$> execStateT (checkRule_ domains systems rule) tEnv
 
 checkRule_ :: [Loc Category] -> [Loc System] -> Loc Rule -> TCResult RuleError ()
@@ -92,7 +80,6 @@ checkRule_ domains systems rule = do
     res <- foldM (\() -> checkPremise . fakeLoc) () premises
     context (CConclusion (fakeLoc base)) (checkConclusion (fakeLoc base))
 
--- Premise matches system
 checkPremise :: Loc Premise -> TCResult RuleError ()
 checkPremise (Loc l (TPremise trans)) =
     context (CPremise (Loc l (TPremise trans))) $
@@ -109,8 +96,6 @@ checkConclusion (Loc l trans) = do
     sys <- getSystem system (UndefinedArrow (Loc l system))
     checkTrans sys trans
 
-
-
 checkEquality :: Equality -> TCResult RuleError Type
 checkEquality eq = case eq of
   Eq   l r -> eqCheck l r
@@ -120,19 +105,16 @@ checkEquality eq = case eq of
     eqCheck l r = do
         t1 <- inferExpr l
         t2 <- inferExpr r
-        unify t1 t2
+        t <- unify fakePos fakePos t1 t2
+        TypeEnv {subs} <- get
+        return (subst subs t)
 
 inferExpr :: Expr -> TCResult RuleError Type
 inferExpr (EVar v) =
   inferVar v
-inferExpr (ECall base params) = do
-  -- b <- inferExpr base
-  -- p <- fmap inferExpr params
-  -- TODO: This should actually find the func def and check things
+inferExpr (ECall base params) =
   error "Can't infer calls yet"
 
-
--- Transition matches system
 checkTrans :: Loc System -> Trans -> TCResult RuleError ()
 checkTrans sys Trans { system, before, after } = do
     let Loc l System { arrow, initial, final } = sys
@@ -162,8 +144,6 @@ infer (Loc _ (Syntax _))      = return tSyntax
 infer (Loc _ (Var v))         = inferVar v
 infer (Loc _ (SyntaxList xs)) = tSyntax <$ mapM infer xs
 
-
-
 inferVar :: Monad m => Variable -> TypeChecker m Type
 inferVar (Variable x n m _) = do
     -- TODO: This should make the inferred variable need to be a
@@ -192,12 +172,10 @@ newTypeVar = do
     put tEnv { nextTypeVar_ = TypeVar (tv + 1) }
     return (TypeVar tv)
 
-
 lookupBind :: Monad m => String -> TypeChecker m (Maybe Type)
 lookupBind name = do
     TypeEnv { bindings } <- get
     return (Map.lookup name bindings)
-
 
 typeVars :: Type -> [TypeVar]
 typeVars (TNamed name)    = []
@@ -232,81 +210,72 @@ lookupType name = do
         Just c  -> return $ fromSpec $ spec $ unLoc c
         Nothing -> return $ TNamed name
 
-
-unify :: Type -> Type -> TCResult RuleError Type
-unify t1 t2 = do
+{-
+do
     TypeEnv { subs } <- get
     unifyBase (subst subs t1) (subst subs t2)
-    where
-        unifyBase :: Type -> Type -> TCResult RuleError Type
-        unifyBase (TNamed x) t2  = do
+-}
+unify :: Pos -> Pos -> Type -> Type -> TCResult RuleError Type
+unify lp rp t1_ t2_ =
+    case (t1_, t2_) of
+        (TNamed x, t2) -> do
             t1 <- lookupType x
-            unify t1 t2
-        unifyBase t1 (TNamed x)  = do
+            unify lp rp t1 t2
+        (t1, TNamed x) -> do
             t2 <- lookupType x
-            unify t1 t2
-        unifyBase (TCategory x1) (TCategory x2) =
-            return $
-                if x1 == x2 then
-                    TCategory x1
-                else
-                    TUnion [TCategory x1, TCategory x2]
-        unifyBase t (TVar tv) =
-            varBind tv t
-        unifyBase (TVar tv) t =
-            varBind tv t
-        unifyBase (TCross [t1]) t2 = unifyBase t1 t2
-        unifyBase t1 (TCross [t2]) = unifyBase t1 t2
-        unifyBase (TCross t1) (TCross t2) | length t1 == length t2  =
-            trace (show (TCross t1) ++ show (TCross t2)) $
-            unifyCross (zip t1 t2) []
-        unifyBase (TFunc a1 b1) (TFunc a2 b2) = do
-            a <- unify a1 a2
-            b <- unify b1 b2
+            unify lp rp t1 t2
+        (TCategory x1, TCategory x2) | x1 == x2 ->
+            return $ TCategory x1
+        (t, TVar tv) -> varBind tv t
+        (TVar tv, t) -> varBind tv t
+        (TCross [t1], t2) -> unify lp rp t1 t2
+        (t1, TCross [t2]) -> unify lp rp t1 t2
+        (TCross t1, TCross t2) | length t1 == length t2  ->
+            unifyCross lp rp (zip t1 t2) []
+        (TFunc a1 b1, TFunc a2 b2) -> do
+            a <- unify lp rp a1 a2
+            b <- unify lp rp b1 b2
             return (TFunc a b)
-        unifyBase (TUnion [l]) rs = unifyBase l rs
-        unifyBase ls (TUnion [r]) = unifyBase ls r
-        unifyBase (TUnion ls) (TUnion rs) =
-            return $ TUnion (nub (List.sort (ls ++ rs)))
-        unifyBase (TUnion xs) t =
-            unifyUnion xs xs t
-        unifyBase t (TUnion xs) =
-            unifyUnion xs xs t
-        unifyBase t1 t2 =
-            return $ TUnion [t1, t2]
+        (TUnion [l], rs) -> unify lp rp l rs
+        (ls, TUnion [r]) -> unify lp rp ls r
+        (TUnion ls, TUnion rs) -> return $ TUnion (nub (List.sort (ls ++ rs)))
+        (TUnion xs, t) -> unifyUnion lp rp xs xs t
+        (t, TUnion xs) -> unifyUnion lp rp xs xs t
+        -- We _could_ technically create a `TUnion` of the two types,
+        -- but unify only gets used for constraining the types such as
+        -- in an equality.
+        -- Hence it returns an error when the types can't be matched.
+        (t1, t2) -> returnError $ TypeMismatch (Loc lp t1) (Loc rp t2)
 
-        unifyCross :: [(Type, Type)] -> [Type] -> TCResult RuleError Type
-        unifyCross [] results =
-            (return . TCross . reverse) results
-        unifyCross ((t1_, t2_) : ts_) results = do
-            t <- unify t1_ t2_
-            unifyCross ts_ (t : results)
+unifyCross :: Pos -> Pos -> [(Type, Type)] -> [Type] -> TCResult RuleError Type
+unifyCross _ _ [] results =
+    return $ TCross (reverse results)
+unifyCross lp rp ((t1_, t2_) : ts_) results = do
+    t <- unify lp rp t1_ t2_
+    unifyCross lp rp ts_ (t : results)
 
-        -- TODO: What kind of errors can be returned from unify? isn't it just InfiniteType?
-        --       This TypeMismatch error would then be misleading, should we just return the
-        --       first sub-error? Can an InifiniteType error even occur?
-        unifyUnion :: [Type] -> [Type] -> Type -> TCResult RuleError Type
-        unifyUnion fullUnion (l : rest) r = do
-            env <- get
-            case runStateT (unify l r) env of
-                (Right (t, nextEnv)) -> do
-                    put nextEnv
-                    return t
-                (Left er) ->
-                    unifyUnion fullUnion rest r
-        unifyUnion fullUnion [] t =
-            returnError $ TypeMismatch (TUnion fullUnion) (fakeLoc t)
+unifyUnion :: Pos -> Pos -> [Type] -> [Type] -> Type -> TCResult RuleError Type
+unifyUnion lp rp fullUnion (l : rest) r = do
+    env <- get
+    case runStateT (unify lp rp l r) env of
+        (Right (t, nextEnv)) -> do
+            put nextEnv
+            return t
+        (Left er) ->
+            unifyUnion lp rp fullUnion rest r
+unifyUnion l1 l2 fullUnion [] t =
+    returnError $ TypeMismatch (Loc l1 (TUnion fullUnion)) (Loc l2 t)
 
 typeMatches :: Type -> Type -> Bool
-typeMatches (TNamed t1) (TNamed t2) = t1 == t2
+typeMatches (TNamed t1) (TNamed t2)       = t1 == t2
 typeMatches (TCategory t1) (TCategory t2) = t1 == t2
-typeMatches (TVar _) _ = True
-typeMatches _ (TVar _) = True
-typeMatches (TCross [t1]) t2 = typeMatches t1 t2
-typeMatches t1 (TCross [t2]) = typeMatches t1 t2
+typeMatches (TVar _) _                    = True
+typeMatches _ (TVar _)                    = True
+typeMatches (TCross [t1]) t2              = typeMatches t1 t2
+typeMatches t1 (TCross [t2])              = typeMatches t1 t2
 typeMatches (TCross t1) (TCross t2) | length t1 == length t2 =
     all (uncurry typeMatches) (zip t1 t2)
-typeMatches ls (TUnion [r]) = typeMatches ls r
+typeMatches ls (TUnion [r])         = typeMatches ls r
 typeMatches (TUnion ls) (TUnion rs) = all (\t -> any (typeMatches t) rs) ls
-typeMatches t (TUnion rs) = any (typeMatches t) rs
+typeMatches t (TUnion rs)           = any (typeMatches t) rs
 typeMatches t1 t2                   = False

@@ -26,7 +26,7 @@ data CategoryError = CatError
 data SystemError = SysError
 
 data RuleError
-  = TypeMismatch Type (Loc Type)
+  = TypeMismatch (Loc Type) (Loc Type)
   -- I'm not sure if the InfiniteType error is possible given that all
   -- functions have to be explicitly declared upfront with their type
   -- signatures.

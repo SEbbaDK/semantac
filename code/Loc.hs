@@ -17,7 +17,10 @@ pos :: Loc a -> Pos
 pos (Loc p _) = p
 
 fakeLoc :: a -> Loc a
-fakeLoc = Loc (("fake", 0, 0), ("fake", 0, 0))
+fakeLoc = Loc fakePos
+
+fakePos :: Pos
+fakePos = (("fake", 0, 0), ("fake", 0, 0))
 
 instance Functor Loc where
   fmap f (Loc l v) = Loc l (f v)
