@@ -11,6 +11,7 @@ pkgs.stdenv.mkDerivation {
         	hpkgs.megaparsec
     	]))
     	pkgs.stylish-haskell
+		pkgs.haskell-language-server
 	];
 
 	LANG="C.UTF8";
