@@ -145,34 +145,29 @@ inferExpr (ECall base params) =
 unify :: Pos -> Pos -> Type -> Type -> TCResult RuleError Type
 unify lp rp t1_ t2_ =
     case (t1_, t2_) of
-        (TNamed x, t2) -> do
-            t1 <- lookupType x
-            unify lp rp t1 t2
-        (t1, TNamed x) -> do
-            t2 <- lookupType x
-            unify lp rp t1 t2
         (TCategory x1, TCategory x2) | x1 == x2 ->
             return $ TCategory x1
-        (t, TVar tv) -> varBind tv t
-        (TVar tv, t) -> varBind tv t
-        (TCross [t1], t2) -> unify lp rp t1 t2
-        (t1, TCross [t2]) -> unify lp rp t1 t2
-        (TCross t1, TCross t2) | length t1 == length t2  ->
-            unifyCross lp rp (zip t1 t2) []
-        (TFunc a1 b1, TFunc a2 b2) -> do
-            a <- unify lp rp a1 a2
-            b <- unify lp rp b1 b2
+        (TCross lts, TCross rts) | length lts == length rts  ->
+            unifyCross lp rp (zip lts rts) []
+        (TUnion lts, TUnion rts) -> return $ TUnion (nub (sort (lts ++ rts)))
+        (TFunc lat lrt, TFunc rat rrt) -> do
+            a <- unify lp rp lat rat
+            b <- unify lp rp lrt rrt
             return (TFunc a b)
-        (TUnion [l], rs) -> unify lp rp l rs
-        (ls, TUnion [r]) -> unify lp rp ls r
-        (TUnion ls, TUnion rs) -> return $ TUnion (nub (sort (ls ++ rs)))
-        (TUnion xs, t) -> unifyUnion lp rp xs xs t
-        (t, TUnion xs) -> unifyUnion lp rp xs xs t
+        (TNamed x, rt)    -> lookupType x >>= \lt -> unify lp rp lt rt
+        (TVar tv, rt)     -> varBind tv rt
+        (TCross [lt], rt) -> unify lp rp lt rt
+        (TUnion [lt], rt) -> unify lp rp lt rt
+        (TUnion lts, rt)  -> unifyUnion lp rp lts lts rt
+        (lt, TNamed x)    -> unify rp lp (TNamed x) lt
+        (lt, TVar tv)     -> unify rp lp (TVar tv) lt
+        (lt, TCross rts)  -> unify rp lp (TCross rts) lt
+        (lt, TUnion rts)  -> unify rp lp (TUnion rts) lt
         -- We _could_ technically create a `TUnion` of the two types,
         -- but unify only gets used for constraining the types such as
         -- in an equality.
         -- Hence it returns an error when the types can't be matched.
-        (t1, t2) -> returnError $ TypeMismatch (Loc lp t1) (Loc rp t2)
+        (lt, rt)          -> returnError $ TypeMismatch (Loc lp lt) (Loc rp rt)
 
 unifyCross :: Pos -> Pos -> [(Type, Type)] -> [Type] -> TCResult RuleError Type
 unifyCross _ _ [] results =
