@@ -93,11 +93,11 @@ checkTrans sys Transition {  before, after } = do
     let Loc l System { arrow, initial, final } = sys
     context (CConf before) $ do
         tl <- infer before
-        tr <- substTC $ fromSpec $ unLoc initial
+        tr <- substTC $ unLoc initial
         unify (pos before) (pos initial) tl tr
     context (CConf after) $ do
         tl <- infer after
-        tr <- substTC $ fromSpec $ unLoc final
+        tr <- substTC $ unLoc final
         unify (pos after) (pos final) tl tr
     return ()
     where
@@ -249,7 +249,7 @@ lookupType :: String -> TCResult a Type
 lookupType name = do
     TypeEnv { domains } <- get
     case find (\c -> name == cName (unLoc c)) domains of
-        Just c  -> return $ fromSpec $ spec $ unLoc c
+        Just c  -> return $ cType $ unLoc c
         Nothing -> return $ TNamed name
 
 mapError :: (Error a -> Error b) -> TCResult a t -> TCResult b t

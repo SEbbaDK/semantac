@@ -96,7 +96,7 @@ data Context
   = CRule (Loc Rule)
   | CCategory (Loc Category)
   | CSystem (Loc System)
-  | CSpec (Loc Spec)
+  | CSpec (Loc Type)
   | CPremise (Loc Premise)
   | CEquality (Loc Expr) (Loc Expr)
   | CInequality (Loc Expr) (Loc Expr)

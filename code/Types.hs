@@ -1,6 +1,5 @@
 module Types where
 
-import           Ast
 import           Control.Monad       (foldM, void)
 import           Control.Monad.State (MonadState (get, put), State, evalState)
 import           Data.List           as List (intercalate)
@@ -26,24 +25,14 @@ instance Show Type where
     show (TFunc a b)      = show a ++ " → " ++ show b
     show (TVar tv)        = show tv
 
-fromSpec :: Spec -> Type
-fromSpec SInteger    = tIntger
-fromSpec SIdentifier = tIdentifier
-fromSpec SSyntax     = tSyntax
-fromSpec (SCustom x) = TNamed x
-fromSpec (SCross xs) = TCross (fmap fromSpec xs)
-fromSpec (SUnion xs) = TUnion (fmap fromSpec xs)
-fromSpec (SFunc a b) = TFunc (fromSpec a) (fromSpec b)
-
-
 tSyntax :: Type
 tSyntax = TCategory "Syntax"
 
 tIdentifier :: Type
 tIdentifier = TCategory "Id"
 
-tIntger :: Type
-tIntger = TCategory "Int"
+tInteger :: Type
+tInteger = TCategory "Int"
 
 
 newtype TypeVar

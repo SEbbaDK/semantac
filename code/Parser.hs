@@ -6,7 +6,6 @@
 module Parser where
 
 import           Ast
-import           Ast                        (Premise (PEquality))
 import           Control.Monad              (void)
 import           Data.Text                  (Text, pack, unpack)
 import           Data.Void                  (Void)
@@ -15,6 +14,7 @@ import           Text.Megaparsec
 import           Text.Megaparsec.Char
 import qualified Text.Megaparsec.Char.Lexer as L
 import           Text.Megaparsec.Pos        (unPos)
+import           Types
 
 type Parser = Parsec Void Text
 
@@ -53,11 +53,11 @@ systemParser :: Parser System
 systemParser = do
   try (string "system")
   ws
-  initial <- locced specParser
+  initial <- locced typeParser
   ws
   system <- systemNameParser
   ws
-  final <- locced specParser
+  final <- locced typeParser
   return $ System
     { arrow = system
     , initial = initial
@@ -83,34 +83,34 @@ betweenCharEscaped delimiter = do
   char delimiter
   return res
 
-operSpecParser :: ([Spec] -> Spec) -> Parser a -> Parser Spec
+operSpecParser :: ([Type] -> Type) -> Parser a -> Parser Type
 operSpecParser opCon op = do
   let sep = try (ws >> op >> ws)
-  xs <- (try baseSpecParser) `sepBy` sep
+  xs <- try baseTypeParser `sepBy` sep
   return $ opCon xs
 
-baseSpecParser :: Parser Spec
-baseSpecParser =
-  (between (string "(" >> ws) (ws >> ")" >> ws) specParser)
-    <|> value (string "Integer") SInteger
-    <|> value (string "Identifier") SIdentifier
-    <|> value (string "Syntax") SSyntax
-    <|> fmap SCustom categoryNameParser
+baseTypeParser :: Parser Type
+baseTypeParser =
+  between (string "(" >> ws) (ws >> ")" >> ws) typeParser
+    <|> value (string "Integer") tInteger
+    <|> value (string "Identifier") tIdentifier
+    <|> value (string "Syntax") tSyntax
+    <|> fmap TNamed categoryNameParser
 
-specParser :: Parser Spec
-specParser = let
+typeParser :: Parser Type
+typeParser = let
   biToArray f l r = f [l,r]
-  unionParse = value (string "U" <|> string "∪") (Just $ biToArray SUnion)
-  crossParse = value (string "x" <|> string "×" <|> string "⨯") (Just $ biToArray SCross)
-  funcParse = value (string "->") (Just SFunc)
+  unionParse = value (string "U" <|> string "∪") (Just $ biToArray TUnion)
+  crossParse = value (string "x" <|> string "×" <|> string "⨯") (Just $ biToArray TCross)
+  funcParse = value (string "->") (Just TFunc)
  in do
-  l <- baseSpecParser
+  l <- baseTypeParser
   ws
   o <- try unionParse <|> try crossParse <|> try funcParse <|> return Nothing
   ws
   case o of
     Nothing -> return l
-    Just f  -> fmap (f l) specParser
+    Just f  -> fmap (f l) typeParser
 
 declarationParser :: Parser Declaration
 declarationParser = do
@@ -120,7 +120,7 @@ declarationParser = do
   ws
   char '='
   ws
-  spec <- specParser
+  spec <- typeParser
   ws
   return $ Declaration name spec
 
@@ -138,9 +138,9 @@ categoryParser = do
   ws
   char '='
   ws
-  spec <- specParser
+  cType <- typeParser
   ws
-  return $ Category { cName, variable, spec }
+  return $ Category { cName, variable, cType }
 
 comma :: Parser ()
 comma = do

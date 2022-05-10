@@ -4,25 +4,26 @@ module Ast where
 
 import           Data.List (intercalate, intersperse)
 import           Loc
+import           Types
 
 data Specification
   = Specification [Loc Declaration] [Loc Category] [Loc System] [Loc Rule]
 
 data Declaration
-  = Declaration String Spec
+  = Declaration String Type
 
 data Category
   = Category
     { cName    :: String
     , variable :: String
-    , spec     :: Spec
+    , cType    :: Type
     }
 
 data System
   = System
     { arrow   :: String
-    , initial :: Loc Spec
-    , final   :: Loc Spec
+    , initial :: Loc Type
+    , final   :: Loc Type
     }
 
 instance Show Specification where
@@ -41,31 +42,12 @@ instance Show Declaration where
     unwords [ "meta", name, "=", show spec ]
 
 instance Show Category where
-  show Category {cName, variable, spec} =
-    unwords [ "category", variable, "in", cName, ":", show spec ]
+  show Category {cName, variable, cType} =
+    unwords [ "category", variable, "in", cName, ":", show cType ]
 
 instance Show System where
   show System {arrow, initial, final} =
     unwords [ "system", show initial, arrow, show final ]
-
-data Spec
-  = SInteger
-  | SIdentifier
-  | SSyntax
-  | SCustom String
-  | SCross [Spec]
-  | SUnion [Spec]
-  | SFunc Spec Spec
-  deriving (Eq)
-
-instance Show Spec where
-  show SInteger       = "Integer"
-  show SIdentifier    = "Identifier"
-  show SSyntax        = "Syntax"
-  show (SCustom name) = name
-  show (SCross xs)    = intercalate " ⨯ " (fmap show xs)
-  show (SUnion xs)    = intercalate " ∪ " (fmap show xs)
-  show (SFunc a b)    = show a ++ " → " ++ show b
 
 data Rule
   = Rule
