@@ -13,7 +13,7 @@ instance Functor Error where
   fmap f (Error (ctx, val)) = Error (ctx, f val)
 
 
-data TopError
+data SpecificationError
   = CategoryError CategoryError
   | SystemError SystemError
   | RuleError String RuleError
@@ -37,7 +37,7 @@ data RuleError
 
 type Lines = [String]
 
-showErrorMessage :: String -> Error TopError -> String
+showErrorMessage :: String -> Error SpecificationError -> String
 showErrorMessage src (Error (ctx, e)) = unlines (showTopErrorLines src e)
 
 showErrorInSource :: Error a -> String -> String
@@ -45,7 +45,7 @@ showErrorInSource (Error (ctx, _)) src =
   let p = contextPos $ head ctx
   in showPosInSource p src
 
-showTopErrorLines :: String -> TopError -> Lines
+showTopErrorLines :: String -> SpecificationError -> Lines
 showTopErrorLines src (CategoryError e)        = showCategoryError e
 showTopErrorLines src (SystemError e)          = showSystemError e
 showTopErrorLines src (RuleError ruleName e)   = showRuleError src e
@@ -100,7 +100,7 @@ data Context
   | CPremise (Loc Premise)
   | CEquality (Loc Expr) (Loc Expr)
   | CInequality (Loc Expr) (Loc Expr)
-  | CConclusion (Loc Trans)
+  | CConclusion (Loc Transition)
   | CConf (Loc Conf)
   | CConfSyntaxList [Loc Conf]
   | CConfBinding (Loc Conf) (Loc Conf) (Loc Conf)

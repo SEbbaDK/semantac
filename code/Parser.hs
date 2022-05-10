@@ -6,10 +6,11 @@
 module Parser where
 
 import           Ast
-import           Loc
+import           Ast                        (Premise (PEquality))
 import           Control.Monad              (void)
 import           Data.Text                  (Text, pack, unpack)
 import           Data.Void                  (Void)
+import           Loc
 import           Text.Megaparsec
 import           Text.Megaparsec.Char
 import qualified Text.Megaparsec.Char.Lexer as L
@@ -91,17 +92,17 @@ operSpecParser opCon op = do
 baseSpecParser :: Parser Spec
 baseSpecParser =
   (between (string "(" >> ws) (ws >> ")" >> ws) specParser)
-    <|> value (string "Integer") Integer
-    <|> value (string "Identifier") Identifier
+    <|> value (string "Integer") SInteger
+    <|> value (string "Identifier") SIdentifier
     <|> value (string "Syntax") SSyntax
-    <|> fmap Custom categoryNameParser
+    <|> fmap SCustom categoryNameParser
 
 specParser :: Parser Spec
 specParser = let
   biToArray f l r = f [l,r]
-  unionParse = value (string "U" <|> string "∪") (Just $ biToArray Union)
-  crossParse = value (string "x" <|> string "×" <|> string "⨯") (Just $ biToArray Cross)
-  funcParse = value (string "->") (Just $ Func)
+  unionParse = value (string "U" <|> string "∪") (Just $ biToArray SUnion)
+  crossParse = value (string "x" <|> string "×" <|> string "⨯") (Just $ biToArray SCross)
+  funcParse = value (string "->") (Just SFunc)
  in do
   l <- baseSpecParser
   ws
@@ -109,7 +110,7 @@ specParser = let
   ws
   case o of
     Nothing -> return l
-    Just f -> fmap (f l) specParser
+    Just f  -> fmap (f l) specParser
 
 declarationParser :: Parser Declaration
 declarationParser = do
@@ -133,13 +134,13 @@ categoryParser = do
   ws
   string "∈" <|> string "in"
   ws
-  name <- categoryNameParser
+  cName <- categoryNameParser
   ws
   char '='
   ws
   spec <- specParser
   ws
-  return $ Category { category = name, variable, spec }
+  return $ Category { cName, variable, spec }
 
 comma :: Parser ()
 comma = do
@@ -186,13 +187,13 @@ confElementParser = do
   where
     elemSyntaxParser :: Parser Conf
     elemSyntaxParser = Syntax <$> betweenCharEscaped '"'
-  
+
     elemVarParser :: Parser Conf
     elemVarParser    = Var <$> variableParser
-  
+
     elemParenParser :: Parser Conf
     elemParenParser  = Paren <$> betweenS "(" confElementParser ")"
-  
+
 confParser :: Parser Conf
 confParser =
   betweenS
@@ -200,14 +201,14 @@ confParser =
     (fmap Conf (confElementParser `sepBy` comma))
     ">"
 
-transParser :: Parser Trans
+transParser :: Parser Transition
 transParser = do
   before <- try $ locced confParser
   ws
   system <- systemNameParser
   ws
   after <- locced confParser
-  return $ Trans {system, before, after}
+  return $ Transition {system, before, after}
 
 exprParamParser = betweenS "(" (exprParser `sepBy` some (string "," >> ws)) ")"
 
@@ -231,7 +232,7 @@ eqParser = do
 
 premiseParser :: Parser Premise
 premiseParser = do
-  p <- fmap TPremise transParser <|> fmap EPremise eqParser
+  p <- fmap PTransition transParser <|> fmap PEquality eqParser
   ws
   return p
 
@@ -252,30 +253,30 @@ ruleParser = do
     ruleSepParser = string "---" >> many (char '-') >> ws
     propertyListParser = many (do p <- propertyParser ; ws ; return p)
 
-topParser :: Parser Top
+topParser :: Parser Specification
 topParser =
-  topParser_ (Top [] [] [] [])
+  topParser_ (Specification [] [] [] [])
   where
-    topParser_ :: Top -> Parser Top
-    topParser_ (Top declarations categories systems rules) = ws >>
-      value eof (Top (reverse declarations) (reverse categories) (reverse systems) (reverse rules))
+    topParser_ :: Specification -> Parser Specification
+    topParser_ (Specification declarations categories systems rules) = ws >>
+      value eof (Specification (reverse declarations) (reverse categories) (reverse systems) (reverse rules))
         <|> try ( do
                 d <- locced declarationParser
-                topParser_ $ Top (d : declarations) categories systems rules
+                topParser_ $ Specification (d : declarations) categories systems rules
             )
         <|> try ( do
                 c <- locced categoryParser
-                topParser_ $ Top declarations (c : categories) systems rules
+                topParser_ $ Specification declarations (c : categories) systems rules
             )
         <|> try ( do
                 s <- locced systemParser
-                topParser_ $ Top declarations categories (s : systems) rules
+                topParser_ $ Specification declarations categories (s : systems) rules
             )
         <|> try ( do
                 r <- locced ruleParser
-                topParser_ $ Top declarations categories systems (r : rules)
+                topParser_ $ Specification declarations categories systems (r : rules)
             )
 
-doParse :: String -> String -> Either (ParseErrorBundle Text Void) Top
+doParse :: String -> String -> Either (ParseErrorBundle Text Void) Specification
 doParse filename contents =
   parse topParser filename (pack contents)

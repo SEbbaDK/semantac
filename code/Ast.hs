@@ -1,20 +1,19 @@
-{-# LANGUAGE NamedFieldPuns     #-}
-{-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE NamedFieldPuns #-}
 
 module Ast where
 
 import           Data.List (intercalate, intersperse)
 import           Loc
 
-data Top
-  = Top [Loc Declaration] [Loc Category] [Loc System] [Loc Rule]
+data Specification
+  = Specification [Loc Declaration] [Loc Category] [Loc System] [Loc Rule]
 
-data Declaration =
-  Declaration String Spec
+data Declaration
+  = Declaration String Spec
 
 data Category
   = Category
-    { category :: String
+    { cName    :: String
     , variable :: String
     , spec     :: Spec
     }
@@ -26,8 +25,8 @@ data System
     , final   :: Loc Spec
     }
 
-instance Show Top where
-  show (Top declarations categories systems rules) =
+instance Show Specification where
+  show (Specification declarations categories systems rules) =
     unlines lines
     where
       lines = intercalate [""]
@@ -42,36 +41,36 @@ instance Show Declaration where
     unwords [ "meta", name, "=", show spec ]
 
 instance Show Category where
-  show Category {category, variable, spec} =
-    unwords [ "category", variable, "in", category, ":", show spec ]
+  show Category {cName, variable, spec} =
+    unwords [ "category", variable, "in", cName, ":", show spec ]
 
 instance Show System where
   show System {arrow, initial, final} =
     unwords [ "system", show initial, arrow, show final ]
 
 data Spec
-  = Integer
-  | Identifier
+  = SInteger
+  | SIdentifier
   | SSyntax
-  | Custom String
-  | Cross [Spec]
-  | Union [Spec]
-  | Func Spec Spec
-deriving instance Eq Spec
+  | SCustom String
+  | SCross [Spec]
+  | SUnion [Spec]
+  | SFunc Spec Spec
+  deriving (Eq)
 
 instance Show Spec where
-  show Integer       = "Integer"
-  show Identifier    = "Identifier"
-  show SSyntax       = "Syntax"
-  show (Custom name) = name
-  show (Cross xs)    = intercalate " ⨯ " (fmap show xs)
-  show (Union xs)    = intercalate " ∪ " (fmap show xs)
-  show (Func a b)    = show a ++ " → " ++ show b
+  show SInteger       = "Integer"
+  show SIdentifier    = "Identifier"
+  show SSyntax        = "Syntax"
+  show (SCustom name) = name
+  show (SCross xs)    = intercalate " ⨯ " (fmap show xs)
+  show (SUnion xs)    = intercalate " ∪ " (fmap show xs)
+  show (SFunc a b)    = show a ++ " → " ++ show b
 
 data Rule
   = Rule
     { name       :: String
-    , base       :: Trans
+    , base       :: Transition
     , premises   :: [Premise]
     , properties :: [Property]
     }
@@ -102,15 +101,15 @@ instance Show Property where
   show NonDeterministic = "non-deterministic"
   show NonTerminating   = "non-terminating"
 
-data Trans
-  = Trans
+data Transition
+  = Transition
     { system :: String
     , before :: Loc Conf
     , after  :: Loc Conf
     }
 
-instance Show Trans where
-  show Trans { system, before, after } =
+instance Show Transition where
+  show Transition { system, before, after } =
     show before ++ " " ++ system ++ " " ++ show after
 
 data Variable
@@ -157,12 +156,12 @@ instance Show Conf where
   show (Var v)         = show v
 
 data Premise
-  = TPremise Trans
-  | EPremise Equality
+  = PTransition Transition
+  | PEquality Equality
 
 instance Show Premise where
-  show (TPremise trans) = show trans
-  show (EPremise eq)   = show eq
+  show (PTransition trans) = show trans
+  show (PEquality eq)      = show eq
 
 data Equality
   = Eq Expr Expr
@@ -177,6 +176,6 @@ data Expr
   | ECall Expr [Expr]
 
 instance Show Expr where
-  show (EVar s)  = show s
+  show (EVar s)    = show s
   show (ECall o e) = show o ++ "(" ++ intercalate ", " (map show e) ++ ")"
 

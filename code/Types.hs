@@ -19,21 +19,21 @@ data Type
   deriving (Eq, Ord)
 
 instance Show Type where
-    show (TNamed name) = name
+    show (TNamed name)    = name
     show (TCategory name) = name
-    show (TCross xs)    = intercalate " ⨯ " (fmap show xs)
-    show (TUnion xs)    = intercalate " ∪ " (fmap show xs)
-    show (TFunc a b)    = show a ++ " → " ++ show b
-    show (TVar tv)      = show tv
+    show (TCross xs)      = intercalate " ⨯ " (fmap show xs)
+    show (TUnion xs)      = intercalate " ∪ " (fmap show xs)
+    show (TFunc a b)      = show a ++ " → " ++ show b
+    show (TVar tv)        = show tv
 
 fromSpec :: Spec -> Type
-fromSpec Integer    = tIntger
-fromSpec Identifier = tIdentifier
-fromSpec SSyntax    = tSyntax
-fromSpec (Custom x) = TNamed x
-fromSpec (Cross xs) = TCross (fmap fromSpec xs)
-fromSpec (Union xs) = TUnion (fmap fromSpec xs)
-fromSpec (Func a b) = TFunc (fromSpec a) (fromSpec b)
+fromSpec SInteger    = tIntger
+fromSpec SIdentifier = tIdentifier
+fromSpec SSyntax     = tSyntax
+fromSpec (SCustom x) = TNamed x
+fromSpec (SCross xs) = TCross (fmap fromSpec xs)
+fromSpec (SUnion xs) = TUnion (fmap fromSpec xs)
+fromSpec (SFunc a b) = TFunc (fromSpec a) (fromSpec b)
 
 
 tSyntax :: Type
@@ -69,12 +69,12 @@ typeVars (TFunc a b)      = typeVars a ++ typeVars b
 type Substitutions = Map TypeVar Type
 
 subst :: Substitutions -> Type -> Type
-subst subs (TNamed x)  = TNamed x
-subst subs (TCategory x)  = TCategory x
-subst subs (TCross xs) = TCross (fmap (subst subs) xs)
-subst subs (TUnion xs) = TUnion (fmap (subst subs) xs)
-subst subs (TFunc a b) = TFunc (subst subs a) (subst subs b)
-subst subs (TVar tv)   = fromMaybe (TVar tv) (Map.lookup tv subs)
+subst subs (TNamed x)    = TNamed x
+subst subs (TCategory x) = TCategory x
+subst subs (TCross xs)   = TCross (fmap (subst subs) xs)
+subst subs (TUnion xs)   = TUnion (fmap (subst subs) xs)
+subst subs (TFunc a b)   = TFunc (subst subs a) (subst subs b)
+subst subs (TVar tv)     = fromMaybe (TVar tv) (Map.lookup tv subs)
 
 
 

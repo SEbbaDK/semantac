@@ -34,13 +34,13 @@ type TCResult e a = TypeChecker (Either (Error e)) a
 -- Type Checking
 
 type CheckResult = Map String (Map String Type)
-type TopResult = Either (Error TopError) CheckResult
+type SpecificationResult = Either (Error SpecificationError) CheckResult
 
-check :: Top -> TopResult
-check (Top declarations domains systems rules) =
+check :: Specification -> SpecificationResult
+check (Specification declarations domains systems rules) =
     foldl f (Right mempty) rules
     where
-        f :: TopResult -> Loc Rule -> TopResult
+        f :: SpecificationResult -> Loc Rule -> SpecificationResult
         f (Right allBinds) rule =
             bimap
                 (fmap (RuleError ruleName))
@@ -61,18 +61,18 @@ checkRule_ rule = do
     context (CConclusion (fakeLoc base)) (checkConclusion (fakeLoc base))
 
 checkPremise :: Loc Premise -> TCResult RuleError ()
-checkPremise (Loc l (TPremise trans)) =
-    context (CPremise (Loc l (TPremise trans))) $
+checkPremise (Loc l (PTransition trans)) =
+    context (CPremise (Loc l (PTransition trans))) $
     do
-        let Trans { system } = trans
+        let Transition { system } = trans
         sys <- lookupSystem l system
         checkTrans sys trans
-checkPremise (Loc l (EPremise eq)) =
+checkPremise (Loc l (PEquality eq)) =
     checkEquality eq
 
-checkConclusion :: Loc Trans -> TCResult RuleError ()
+checkConclusion :: Loc Transition -> TCResult RuleError ()
 checkConclusion (Loc l trans) = do
-    let Trans { system } = trans
+    let Transition { system } = trans
     sys <- lookupSystem l system
     checkTrans sys trans
 
@@ -88,9 +88,8 @@ checkEquality eq = case eq of
         unify fakePos fakePos t1 t2
         return ()
 
-
-checkTrans :: Loc System -> Trans -> TCResult RuleError ()
-checkTrans sys Trans { before, after } = do
+checkTrans :: Loc System -> Transition -> TCResult RuleError ()
+checkTrans sys Transition {  before, after } = do
     let Loc l System { arrow, initial, final } = sys
     context (CConf before) $ do
         tl <- infer before
@@ -254,7 +253,7 @@ returnError err = do
 lookupType :: String -> TCResult a Type
 lookupType name = do
     TypeEnv { domains } <- get
-    case find (\c -> name == category (unLoc c)) domains of
+    case find (\c -> name == cName (unLoc c)) domains of
         Just c  -> return $ fromSpec $ spec $ unLoc c
         Nothing -> return $ TNamed name
 
