@@ -58,6 +58,14 @@ instance Show TypeVar where
                 let (q, r) = quotRem (n - 1) 26 in
                 toEnum (fromEnum 'a' + r) : intToAlphaRev q
 
+typeVars :: Type -> [TypeVar]
+typeVars (TNamed name)    = []
+typeVars (TCategory name) = []
+typeVars (TCross xs)      = concatMap typeVars xs
+typeVars (TUnion xs)      = concatMap typeVars xs
+typeVars (TVar v)         = [v]
+typeVars (TFunc a b)      = typeVars a ++ typeVars b
+
 type Substitutions = Map TypeVar Type
 
 subst :: Substitutions -> Type -> Type
