@@ -17,6 +17,8 @@ import           Errors
 import           Loc
 import           Types
 
+import Debug.Trace
+
 data TCState
   = TypeEnv
     { nextTypeVar_ :: TypeVar
@@ -89,16 +91,16 @@ checkEquality eq = case eq of
         return ()
 
 checkTrans :: Loc System -> Transition -> TCResult RuleError ()
-checkTrans sys Transition {  before, after } = do
+checkTrans sys Transition { before, after } = do
     let Loc l System { arrow, initial, final } = sys
     context (CConf before) $ do
         tl <- infer before
         tr <- substTC $ unLoc initial
-        unify (pos before) (pos initial) tl tr
+        mapError (mismatch sys initial) $ unify (pos before) (pos initial) tl tr
     context (CConf after) $ do
         tl <- infer after
         tr <- substTC $ unLoc final
-        unify (pos after) (pos final) tl tr
+        mapError (mismatch sys final) $ unify (pos after) (pos final) tl tr
     return ()
     where
         substTC :: Type -> TCResult a Type
@@ -107,6 +109,10 @@ checkTrans sys Transition {  before, after } = do
             case subst subs t of
                 TNamed x -> lookupType x
                 t        -> return t
+        mismatch :: Loc System -> Loc Type -> Error RuleError -> Error RuleError
+        mismatch sys sysdef (Error (s, TypeMismatch use def)) =
+            Error (s, ConfTypeMismatch use def $ Loc (pos sysdef) $ unLoc sys)
+        mismatch _ _ e = e
 
 
 -- Inference
@@ -254,3 +260,4 @@ lookupType name = do
 
 mapError :: (Error a -> Error b) -> TCResult a t -> TCResult b t
 mapError f = mapStateT (left f)
+

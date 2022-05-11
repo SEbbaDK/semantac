@@ -91,11 +91,16 @@ operSpecParser opCon op = do
 
 baseTypeParser :: Parser Type
 baseTypeParser =
-  between (string "(" >> ws) (ws >> ")" >> ws) typeParser
+  between (string "(" >> ws) (ws >> ")") typeParser
     <|> value (string "Integer") tInteger
     <|> value (string "Identifier") tIdentifier
     <|> value (string "Syntax") tSyntax
     <|> fmap TNamed categoryNameParser
+
+wtry p = try $ do
+  ws
+  r <- p
+  return r
 
 typeParser :: Parser Type
 typeParser = let
@@ -105,9 +110,7 @@ typeParser = let
   funcParse = value (string "->") (Just TFunc)
  in do
   l <- baseTypeParser
-  ws
-  o <- try unionParse <|> try crossParse <|> try funcParse <|> return Nothing
-  ws
+  o <- wtry unionParse <|> wtry crossParse <|> wtry funcParse <|> return Nothing
   case o of
     Nothing -> return l
     Just f  -> fmap (f l) typeParser

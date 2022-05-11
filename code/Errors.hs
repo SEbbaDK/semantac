@@ -33,7 +33,7 @@ data RuleError
   | InifiniteType TypeVar (Loc Type)
   | UndefinedVar (Loc String)
   | UndefinedArrow (Loc String)
-  | ConfTypeMismatch (Loc Type) (Loc System)
+  | ConfTypeMismatch (Loc Type) (Loc Type) (Loc System)
 
 type Lines = [String]
 
@@ -58,9 +58,11 @@ showSystemError :: SystemError -> Lines
 showSystemError _ = ["todo"]
 
 showRuleError :: String -> RuleError -> Lines
-showRuleError src (TypeMismatch t1 (Loc p t2)) =
-  [ "Type mismatch at " ++ showPos p
-  , showPosInSource p src
+showRuleError src (TypeMismatch (Loc p1 t1) (Loc p2 t2)) =
+  [ "Type mismatch between: " ++ showPos p1
+  , showPosInSource p1 src
+  , "  and: " ++ showPos p2
+  , showPosInSource p2 src
   , "  Expected: " ++ show t2
   , "  Received: " ++ show t1
   ]
@@ -79,16 +81,17 @@ showRuleError src (UndefinedArrow (Loc p arrowName)) =
   [ "Use of undefined arrow: " ++ arrowName
   , showPosInSource p src
   ]
-showRuleError src (ConfTypeMismatch (Loc usedPos used) (Loc sysPos sys)) =
+showRuleError src (ConfTypeMismatch (Loc usedPos usedType) (Loc defPos defType) (Loc confpos sys)) =
   let
     System { arrow, initial, final } = sys
   in
-    [ "The type of the configuration at " ++ showPos usedPos ++ " does not match the type given in the definition of the transition system.\n"
-    , "  The type of the configuration is: " ++ show used
+    [ "The type of the configuration at " ++ showPos usedPos ++ " does not match the type given in the definition of the transition system: " ++ arrow
+    , ""
+    , "  The type of the configuration is: " ++ show usedType
     , showPosInSource usedPos src
-    , "  System specification: " ++ show sys
-    , showPosInSource sysPos src
-    , "These two types should match, but they do not.\n"
+    , "  System specification: " ++ show defType
+    , showPosInSource defPos src
+    , "These two types should match, but they do not."
     ]
 
 
