@@ -59,41 +59,48 @@ showSystemError _ = ["todo"]
 
 showRuleError :: String -> RuleError -> Lines
 showRuleError src (TypeMismatch (Loc p1 t1) (Loc p2 t2)) =
-  [ "Type mismatch between: " ++ showPos p1
+  [ header $ "Type mismatch between: " ++ showPos p1
   , showPosInSource p1 src
-  , "  and: " ++ showPos p2
+  , header $ "  and: " ++ showPos p2
   , showPosInSource p2 src
-  , "  Expected: " ++ show t2
-  , "  Received: " ++ show t1
+  , bold $ "  Expected: " ++ blue (show t2)
+  , bold $ "  Received: " ++ blue (show t1)
   ]
 showRuleError src (InifiniteType tv (Loc p t)) =
   -- This message is kinda impossible to understand I think.
   -- Failure of the "occurs check" is the terminology in the literature for this type of error.
-  [ "Infinite type. "
+  [ header $ "Infinite type. "
   , "  Type variable " ++ show (TVar tv) ++ " occurs in " ++ show t
   , showPosInSource p src
   ]
 showRuleError src (UndefinedVar (Loc p name)) =
-  [ "Use of undefined variable \"" ++ name ++ "\""
+  [ header $ "Use of undefined variable \"" ++ name ++ "\""
   , showPosInSource p src
   ]
 showRuleError src (UndefinedArrow (Loc p arrowName)) =
-  [ "Use of undefined arrow: " ++ arrowName
+  [ header $ "Use of undefined arrow: " ++ arrowName
   , showPosInSource p src
   ]
 showRuleError src (ConfTypeMismatch (Loc usedPos usedType) (Loc defPos defType) (Loc confpos sys)) =
   let
     System { arrow, initial, final } = sys
   in
-    [ "The type of the configuration at " ++ showPos usedPos ++ " does not match the type given in the definition of the transition system: " ++ arrow
+    [ header $ "Mismatch between configuration and defined transition system."
     , ""
-    , "  The type of the configuration is: " ++ show usedType
+    , "The type of the configuration at " ++ showPos usedPos ++ " does not match the type given in the definition of the transition system: " ++ arrow
+    , ""
+    , bold $ "  The type of the configuration: " ++ blue (show usedType)
     , showPosInSource usedPos src
-    , "  System specification: " ++ show defType
+    , bold $ "  The system specifies that it should be: " ++ blue (show defType)
     , showPosInSource defPos src
-    , "These two types should match, but they do not."
+    , bold $ "These two types should match, but they do not."
     ]
 
+code c s = "\x1b[" ++ c ++ "m" ++ s ++ "\x1b[m"
+bold = code "1"
+blue = code "31"
+red = code "32"
+header = bold . red
 
 data Context
   = CRule (Loc Rule)
