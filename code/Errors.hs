@@ -63,8 +63,8 @@ showRuleError src (TypeMismatch (Loc p1 t1) (Loc p2 t2)) =
   , showPosInSource p1 src
   , header $ "  and: " ++ showPos p2
   , showPosInSource p2 src
-  , bold $ "  Expected: " ++ blue (show t2)
-  , bold $ "  Received: " ++ blue (show t1)
+  , bold $ "  Expected: " ++ highlight (show t2)
+  , bold $ "  Received: " ++ highlight (show t1)
   ]
 showRuleError src (InifiniteType tv (Loc p t)) =
   -- This message is kinda impossible to understand I think.
@@ -89,18 +89,18 @@ showRuleError src (ConfTypeMismatch (Loc usedPos usedType) (Loc defPos defType) 
     , ""
     , "The type of the configuration at " ++ showPos usedPos ++ " does not match the type given in the definition of the transition system: " ++ arrow
     , ""
-    , bold $ "  The type of the configuration: " ++ blue (show usedType)
+    , bold $ "  The type of the configuration: " ++ highlight (show usedType)
     , showPosInSource usedPos src
-    , bold $ "  The system specifies that it should be: " ++ blue (show defType)
+    , bold $ "  The system specifies that it should be: " ++ highlight (show defType)
     , showPosInSource defPos src
     , bold $ "These two types should match, but they do not."
     ]
 
 code c s = "\x1b[" ++ c ++ "m" ++ s ++ "\x1b[m"
 bold = code "1"
-blue = code "31"
-red = code "32"
-header = bold . red
+underline = code "4"
+highlight = code "32"
+header = bold . (code "30:42")
 
 data Context
   = CRule (Loc Rule)
