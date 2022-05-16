@@ -11,7 +11,7 @@ import           Control.Monad.Cont  (lift)
 import           Control.Monad.State (MonadState (get, put), StateT (runStateT),
                                       execStateT, mapStateT, modify)
 import           Data.Bifunctor      (Bifunctor (bimap))
-import           Data.List           (find, nub, sort)
+import           Data.List           (find)
 import           Data.Map.Strict     as Map (Map, map, insert, lookup)
 import           Errors
 import           Loc
