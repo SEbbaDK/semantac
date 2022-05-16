@@ -12,6 +12,7 @@ import           System.IO             (hPutStr, stderr)
 import           Text.Megaparsec.Error (errorBundlePretty)
 import           TypeChecker           (check)
 import           Types
+import           Ast                   (Variable)
 
 putErr :: String -> IO ()
 putErr = hPutStr stderr
@@ -54,5 +55,5 @@ cli Args {file, printast, printlatex = False, printBinds} = do
 cli Args {file, printast, printlatex = True} = do
   putStrLn "latex mode"
 
-showBinds :: Map String Type -> String
-showBinds = foldlWithKey (\a name type_ -> a ++ "\n" ++ name ++ " :: " ++ show type_) []
+showBinds :: Map Variable Type -> String
+showBinds = foldlWithKey (\a x type_ -> a ++ "\n" ++ show x ++ " :: " ++ show type_) []

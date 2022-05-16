@@ -6,25 +6,26 @@ module TypeChecker where
 
 import           Ast
 import           Control.Arrow       (left)
-import           Control.Monad       (foldM_)
+import           Control.Monad       (foldM_, zipWithM)
 import           Control.Monad.Cont  (lift)
 import           Control.Monad.State (MonadState (get, put), StateT (runStateT),
-                                      execStateT, mapStateT)
+                                      execStateT, mapStateT, modify)
 import           Data.Bifunctor      (Bifunctor (bimap))
 import           Data.List           (find, nub, sort)
-import           Data.Map.Strict     as Map (Map, insert, lookup)
+import           Data.Map.Strict     as Map (Map, map, insert, lookup)
 import           Errors
 import           Loc
 import           Types
 
 import Debug.Trace
+import Data.Foldable (foldlM)
 
 data TCState
-  = TypeEnv
-    { nextTypeVar_ :: TypeVar
+  = TCState
+    { nextTypeVar_ :: Int
     , subs         :: Substitutions
-    , bindings     :: Map String Type
-    , domains      :: [Loc Category]
+    , bindings     :: Map Variable TypeVar
+    , categories   :: [Loc Category]
     , systems      :: [Loc System]
     , contextStack :: ContextStack
     }
@@ -35,11 +36,11 @@ type TCResult e a = TypeChecker (Either (Error e)) a
 
 -- Type Checking
 
-type CheckResult = Map String (Map String Type)
+type CheckResult = Map String (Map Variable Type)
 type SpecificationResult = Either (Error SpecificationError) CheckResult
 
 check :: Specification -> SpecificationResult
-check (Specification declarations domains systems rules) =
+check (Specification declarations categories systems rules) =
     foldl f (Right mempty) rules
     where
         f :: SpecificationResult -> Loc Rule -> SpecificationResult
@@ -47,73 +48,62 @@ check (Specification declarations domains systems rules) =
             bimap
                 (fmap (RuleError ruleName))
                 (\binds -> insert ruleName binds allBinds)
-                (checkRule domains systems rule)
+                (checkRule categories systems rule)
             where Rule { name = ruleName } = unLoc rule
         f (Left x) rule = Left x
 
-checkRule :: [Loc Category] -> [Loc System] -> Loc Rule -> Either (Error RuleError) (Map String Type)
-checkRule domains systems rule =
-    let tEnv = TypeEnv (TypeVar 1) mempty mempty domains systems [CRule rule] in
-    bindings <$> execStateT (checkRule_ rule) tEnv
+checkRule :: [Loc Category] -> [Loc System] -> Loc Rule -> Either (Error RuleError) (Map Variable Type)
+checkRule categories systems rule = do
+    let state = TCState 1 mempty mempty categories systems [CRule rule]
+    TCState {bindings, subs} <- execStateT (checkRuleHelper rule) state
+    return $ fmap (subst subs . TVar) bindings
 
-checkRule_ :: Loc Rule -> TCResult RuleError ()
-checkRule_ rule = do
+
+checkRuleHelper :: Loc Rule -> TCResult RuleError ()
+checkRuleHelper rule = do
     let Rule {base, premises, properties} = unLoc rule
     foldM_ (\() -> checkPremise . fakeLoc) () premises
-    context (CConclusion (fakeLoc base)) (checkConclusion (fakeLoc base))
+    context (CConclusion (fakeLoc base)) (checkTransition (fakeLoc base))
 
 checkPremise :: Loc Premise -> TCResult RuleError ()
 checkPremise (Loc l (PTransition trans)) =
-    context (CPremise (Loc l (PTransition trans))) $
-    do
-        let Transition { system } = trans
-        sys <- lookupSystem l system
-        checkTrans sys trans
+    context (CPremise (Loc l (PTransition trans))) $ checkTransition (Loc l  trans)
 checkPremise (Loc l (PEquality eq)) =
     checkEquality eq
 
-checkConclusion :: Loc Transition -> TCResult RuleError ()
-checkConclusion (Loc l trans) = do
-    let Transition { system } = trans
-    sys <- lookupSystem l system
-    checkTrans sys trans
+checkTransition :: Loc Transition -> TCResult RuleError ()
+checkTransition (Loc l trans) = do
+    sys <- lookupSystem l (system trans)
+    checkTransitionHelper sys trans
 
-checkEquality :: Equality -> TCResult RuleError ()
-checkEquality eq = case eq of
-  Eq   l r -> eqCheck l r
-  InEq l r -> eqCheck l r
-  where
-    eqCheck :: Expr -> Expr -> TCResult RuleError ()
-    eqCheck l r = do
-        t1 <- inferExpr l
-        t2 <- inferExpr r
-        unify fakePos fakePos t1 t2
-        return ()
-
-checkTrans :: Loc System -> Transition -> TCResult RuleError ()
-checkTrans sys Transition { before, after } = do
-    let Loc l System { arrow, initial, final } = sys
+checkTransitionHelper :: Loc System -> Transition -> TCResult RuleError ()
+checkTransitionHelper sys Transition { before, after } = do
+    let Loc l System { initial, final } = sys
     context (CConf before) $ do
         tl <- infer before
-        tr <- substTC $ unLoc initial
+        let tr = unLoc initial
         mapError (mismatch sys initial) $ unify (pos before) (pos initial) tl tr
     context (CConf after) $ do
         tl <- infer after
-        tr <- substTC $ unLoc final
+        let tr = unLoc final
         mapError (mismatch sys final) $ unify (pos after) (pos final) tl tr
     return ()
     where
-        substTC :: Type -> TCResult a Type
-        substTC t = do
-            TypeEnv { subs } <- get
-            case subst subs t of
-                TNamed x -> lookupType x
-                t        -> return t
         mismatch :: Loc System -> Loc Type -> Error RuleError -> Error RuleError
         mismatch sys sysdef (Error (s, TypeMismatch use def)) =
             Error (s, ConfTypeMismatch use def $ Loc (pos sysdef) $ unLoc sys)
         mismatch _ _ e = e
 
+checkEquality :: Equality -> TCResult RuleError ()
+checkEquality (Eq l r)   = checkEqualityHelper l r
+checkEquality (InEq l r) = checkEqualityHelper l r
+
+checkEqualityHelper :: Expr -> Expr -> TCResult RuleError ()
+checkEqualityHelper l r = do
+    t1 <- inferExpr l
+    t2 <- inferExpr r
+    unify fakePos fakePos t1 t2
+    return ()
 
 -- Inference
 
@@ -122,77 +112,63 @@ infer (Loc _ (Conf xs))       = TCross <$> mapM infer xs
 infer (Loc _ (Paren e))       = infer e
 infer (Loc _ (Syntax _))      = return tSyntax
 infer (Loc _ (Var v))         = inferVar v
+-- sure, we can _discover_ variables by traversing the SyntaxList, but since we don't have the grammar of the language
+-- we can't actually generate any constraints from this. We'll just have variables bound to generic type variables.
+-- So maybe we shouldn't bother? If a configuration can be an expression, i.e. a function application, then we 
+-- could use those to generate constraints.
+-- TODO: decide if we're adding expressions to the configuration or not.
 infer (Loc _ (SyntaxList xs)) = tSyntax <$ mapM infer xs
 
+-- TODO: This should make the inferred variable need to be a
+--       function if there is bindings
 inferVar :: Monad m => Variable -> TypeChecker m Type
-inferVar (Variable x n m _) = do
-    -- TODO: This should make the inferred variable need to be a
-    --       function if there is bindings
-    maybeT <- lookupBind (x ++ "_" ++ n ++ replicate m '\'')
-    case maybeT of
-        Just t -> return t
-        Nothing -> do
-            t <- TVar <$> newTypeVar
-            tEnv <- get
-            let TypeEnv { bindings } = tEnv
-            put tEnv { bindings = insert x t bindings }
-            return t
+inferVar x = TVar <$> typeVarOf x
+
 
 inferExpr :: Expr -> TCResult RuleError Type
-inferExpr (EVar v) =
-  inferVar v
-inferExpr (ECall base params) =
-  error "Can't infer calls yet"
+inferExpr (EVar v)            = inferVar v
+inferExpr (ECall base params) = error "Can't infer calls yet"
 
 
 -- Unification
 
 -- Note: It seems we never use the results of unifying, only the constraints... We could change the return type to ().
 unify :: Pos -> Pos -> Type -> Type -> TCResult RuleError Type
-unify lp rp t1_ t2_ =
-    case (t1_, t2_) of
+unify lp rp lt rt =
+    case (lt, rt) of
         (TCategory x1, TCategory x2) | x1 == x2 ->
             return $ TCategory x1
-        (TCross lts, TCross rts) | length lts == length rts  ->
-            unifyCross lp rp (zip lts rts) []
-        (TUnion lts, TUnion rts) -> return $ TUnion (nub (sort (lts ++ rts)))
+        (TCross lts, TCross rts) | length lts == length rts ->
+            TCross <$> zipWithM (unify lp rp) lts rts
         (TFunc lat lrt, TFunc rat rrt) -> do
             a <- unify lp rp lat rat
             b <- unify lp rp lrt rrt
             return (TFunc a b)
-        (TNamed x, rt)    -> lookupType x >>= \lt -> unify lp rp lt rt
-        (TVar tv, rt)     -> varBind tv rt
-        (TCross [lt], rt) -> unify lp rp lt rt
-        (TUnion [lt], rt) -> unify lp rp lt rt
-        (TUnion lts, rt)  -> unifyUnion lp rp lts lts rt
-        (lt, TNamed x)    -> unify rp lp (TNamed x) lt
-        (lt, TVar tv)     -> unify rp lp (TVar tv) lt
-        (lt, TCross rts)  -> unify rp lp (TCross rts) lt
-        (lt, TUnion rts)  -> unify rp lp (TUnion rts) lt
+        (TNamed x, _)    -> lookupType lp x >>= \lt -> unify lp rp lt rt
+        (TVar tv, _)     -> bindVar tv rt
+        (TCross [lt], _) -> unify lp rp lt rt
+        (TUnion [lt], _) -> unify lp rp lt rt
+        (TUnion lts, _)  -> unifyUnion lp rp lts lts rt
+        (_, TNamed x)    -> unify rp lp (TNamed x) lt
+        (_, TVar tv)     -> unify rp lp (TVar tv) lt
+        (_, TCross rts)  -> unify rp lp (TCross rts) lt
+        (_, TUnion rts)  -> unify rp lp (TUnion rts) lt
         -- We _could_ technically create a `TUnion` of the two types,
         -- but unify only gets used for constraining the types such as
         -- in an equality.
         -- Hence it returns an error when the types can't be matched.
-        (lt, rt)          -> returnError $ TypeMismatch (Loc lp lt) (Loc rp rt)
-
-unifyCross :: Pos -> Pos -> [(Type, Type)] -> [Type] -> TCResult RuleError Type
-unifyCross _ _ [] results =
-    return $ TCross (reverse results)
-unifyCross lp rp ((t1_, t2_) : ts_) results = do
-    t <- unify lp rp t1_ t2_
-    unifyCross lp rp ts_ (t : results)
+        _               -> returnError $ TypeMismatch (Loc lp lt) (Loc rp rt)
 
 unifyUnion :: Pos -> Pos -> [Type] -> [Type] -> Type -> TCResult RuleError Type
+unifyUnion lp rp fullUnion [] t =
+    returnError $ TypeMismatch (Loc lp (TUnion fullUnion)) (Loc rp t)
 unifyUnion lp rp fullUnion (l : rest) r = do
-    env <- get
-    case runStateT (unify lp rp l r) env of
-        (Right (t, nextEnv)) -> do
-            put nextEnv
-            return t
-        (Left er) ->
-            unifyUnion lp rp fullUnion rest r
-unifyUnion l1 l2 fullUnion [] t =
-    returnError $ TypeMismatch (Loc l1 (TUnion fullUnion)) (Loc l2 t)
+    state <- get
+    case runStateT (unify lp rp l r) state of
+        Left _  -> unifyUnion lp rp fullUnion rest r
+        Right (x, nextState) -> do
+            put nextState
+            return x
 
 
 -- Helper functions
@@ -204,60 +180,64 @@ context ctx s = do
     popContext
     return res
     where
-        pushContext :: Monad m => TypeChecker m ()
-        pushContext = do
-            cCtx <- get
-            let TypeEnv { contextStack } = cCtx
-            put cCtx { contextStack = ctx : contextStack }
-        popContext :: Monad m => TypeChecker m ()
-        popContext = do
-            cCtx <- get
-            let TypeEnv { contextStack } = cCtx
-            case contextStack of
-                []               -> return ()
-                _ : nextCtxStack -> put cCtx { contextStack = nextCtxStack }
+        pushContext = modify (\cCtx -> cCtx { contextStack = ctx : contextStack cCtx })
+        popContext  = modify (\cCtx -> cCtx { contextStack = drop 1 (contextStack cCtx) })
 
 lookupSystem :: Pos -> String -> TCResult RuleError (Loc System)
 lookupSystem pos systemArrow = do
-    TypeEnv { systems } <- get
-    case filter (\(Loc loc System { arrow }) -> arrow == systemArrow) systems of
-        []      -> returnError (UndefinedArrow (Loc pos systemArrow))
-        sys : _ -> return sys
+    TCState { systems } <- get
+    case find ((systemArrow ==) . arrow . unLoc) systems of
+        Nothing  -> returnError (UndefinedArrow (Loc pos systemArrow))
+        Just sys -> return sys
 
 newTypeVar :: Monad m => TypeChecker m TypeVar
 newTypeVar = do
-    tEnv <- get
-    let TypeEnv { nextTypeVar_ = TypeVar tv } = tEnv
-    put tEnv { nextTypeVar_ = TypeVar (tv + 1) }
+    state <- get
+    let tv = nextTypeVar_ state
+    put state { nextTypeVar_ = tv + 1 }
     return (TypeVar tv)
 
-lookupBind :: Monad m => String -> TypeChecker m (Maybe Type)
-lookupBind name = do
-    TypeEnv { bindings } <- get
-    return (Map.lookup name bindings)
+typeVarOf :: Monad m => Variable -> TypeChecker m TypeVar
+typeVarOf x = do
+    state <- get
+    case Map.lookup x (bindings state) of
+        Just t -> return t
+        Nothing -> do
+            t <- newTypeVar
+            put state {bindings = insert x t (bindings state)}
+            return t
 
-varBind :: TypeVar -> Type -> TCResult RuleError Type
-varBind tv t =
+bindVar :: TypeVar -> Type -> TCResult RuleError Type
+bindVar tv t =
     if tv `elem` typeVars t then
         returnError (InifiniteType tv (fakeLoc t))
     else do
-        tEnv <- get
-        let TypeEnv { subs } = tEnv
-        put tEnv { subs = normalizeSubst $ insert tv t subs }
+        state <- get
+        let TCState { subs } = state
+        put state { subs = normalizeSubst $ insert tv t subs }
         return t
+
+-- substTC :: Monad m => Type -> TypeChecker m Type
+-- substTC t = do
+--     TCState { subs } <- get
+--     case subst subs t of
+--         TNamed x -> lookupType x
+--         t        -> return t
+--
+-- \texttt{substTC} performs a substitution using the current substitution map. 
+-- The \texttt{subst} function traverses the given type and replaces type variables with the types that they map to in the substitution map if they are defined there.
 
 returnError :: a -> TypeChecker (Either (Error a)) b
 returnError err = do
-    TypeEnv { contextStack } <- get
+    TCState { contextStack } <- get
     lift (Left (Error (contextStack, err)))
 
-lookupType :: String -> TCResult a Type
-lookupType name = do
-    TypeEnv { domains } <- get
-    case find (\c -> name == cName (unLoc c)) domains of
+lookupType :: Pos -> String -> TCResult RuleError Type
+lookupType p name = do
+    TCState { categories } <- get
+    case find ((name ==) . cName . unLoc) categories of
         Just c  -> return $ cType $ unLoc c
-        Nothing -> return $ TNamed name
+        Nothing -> returnError $ UndefinedType (Loc p name)
 
 mapError :: (Error a -> Error b) -> TCResult a t -> TCResult b t
 mapError f = mapStateT (left f)
-

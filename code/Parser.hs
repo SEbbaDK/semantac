@@ -6,8 +6,7 @@
 module Parser where
 
 import           Ast
-import           Control.Monad              (void)
-import           Data.Text                  (Text, pack, unpack)
+import           Data.Text                  (Text, pack)
 import           Data.Void                  (Void)
 import           Loc
 import           Text.Megaparsec
@@ -18,9 +17,11 @@ import           Types
 
 type Parser = Parsec Void Text
 
+pos2tup :: SourcePos -> (FilePath, Int, Int)
 pos2tup SourcePos {sourceName, sourceLine, sourceColumn} =
   (sourceName, unPos sourceLine, unPos sourceColumn)
 
+getPos :: Parser (FilePath, Int, Int)
 getPos = fmap pos2tup getSourcePos
 
 locced :: Parser a -> Parser (Loc a)
@@ -43,11 +44,11 @@ categoryNameParser = do
   rest <- many letterChar
   return $ c : rest
 
-systemNameChars :: [Char]
-systemNameChars = "-=~|>→↓#"
-
 systemNameParser :: Parser String
-systemNameParser = many (oneOf systemNameChars <|> alphaNumChar)
+systemNameParser =
+  many (oneOf systemNameChars <|> alphaNumChar)
+  where systemNameChars :: [Char]
+        systemNameChars = "-=~|>→↓#"
 
 systemParser :: Parser System
 systemParser = do
@@ -65,9 +66,7 @@ systemParser = do
     }
 
 value :: Parser a -> b -> Parser b
-value parser result = do
-  try parser
-  return result
+value parser result = try parser >> return result
 
 betweenS :: Text -> Parser a -> Text -> Parser a
 betweenS left middle right = do
@@ -83,12 +82,6 @@ betweenCharEscaped delimiter = do
   char delimiter
   return res
 
-operSpecParser :: ([Type] -> Type) -> Parser a -> Parser Type
-operSpecParser opCon op = do
-  let sep = try (ws >> op >> ws)
-  xs <- try baseTypeParser `sepBy` sep
-  return $ opCon xs
-
 baseTypeParser :: Parser Type
 baseTypeParser =
   between (string "(" >> ws) (ws >> ")") typeParser
@@ -97,10 +90,8 @@ baseTypeParser =
     <|> value (string "Syntax") tSyntax
     <|> fmap TNamed categoryNameParser
 
-wtry p = try $ do
-  ws
-  r <- p
-  return r
+wtry :: Parser a -> Parser a
+wtry p = try $ ws >> p
 
 typeParser :: Parser Type
 typeParser = let
@@ -127,13 +118,11 @@ declarationParser = do
   ws
   return $ Declaration name spec
 
-categoryVariableBaseParser = some lowerChar
-
 categoryParser :: Parser Category
 categoryParser = do
   try (string "category")
   ws
-  variable <- categoryVariableBaseParser
+  variable <- some lowerChar
   ws
   string "∈" <|> string "in"
   ws
@@ -145,11 +134,6 @@ categoryParser = do
   ws
   return $ Category { cName, variable, cType }
 
-comma :: Parser ()
-comma = do
-  ws
-  string ","
-  void ws
 
 propertyParser :: Parser Property
 propertyParser =
@@ -158,6 +142,7 @@ propertyParser =
       deterministic = value (string "non-deterministic") NonDeterministic
       terminating = value (string "non-terminating") NonTerminating
 
+bindingParser :: Parser (Variable, Variable)
 bindingParser = do
   char '['
   var <- variableParser
@@ -173,15 +158,15 @@ variableParser :: Parser Variable
 variableParser = do
   base <- some alphaNumChar
   name <- option "" $ char '_' >> some alphaNumChar
-  marks <- fmap length $ many (char '\'')
+  marks <- many (char '\'')
   binds <- many bindingParser
-  return $ Variable base name marks binds
+  return $ Variable base (name ++ marks) binds
 
 confElementParser :: Parser (Loc Conf)
 confElementParser = do
   start <- getPos
   let parsers = try elemSyntaxParser <|> try elemVarParser <|> elemParenParser
-  elems <- (locced parsers) `sepBy` ws
+  elems <- locced parsers `sepBy` ws
   end <- getPos
   return $ case elems of
     [e] -> e
@@ -203,6 +188,7 @@ confParser =
     "<"
     (fmap Conf (confElementParser `sepBy` comma))
     ">"
+    where comma = ws >> string "," >> ws
 
 transParser :: Parser Transition
 transParser = do
@@ -213,6 +199,7 @@ transParser = do
   after <- locced confParser
   return $ Transition {system, before, after}
 
+exprParamParser :: Parser [Expr]
 exprParamParser = betweenS "(" (exprParser `sepBy` some (string "," >> ws)) ")"
 
 exprParser :: Parser Expr
@@ -220,14 +207,13 @@ exprParser = do
   lhs <- variableParser
   params <- many exprParamParser
   ws
-  return $ foldl callify (EVar lhs) params
-    where callify base param = ECall base param
+  return $ foldl ECall (EVar lhs) params
 
 eqParser :: Parser Equality
 eqParser = do
   left <- exprParser
   ws
-  eq <- try (value (string "==") Eq) <|> (value (string "!=") InEq)
+  eq <- try (value (string "==") Eq) <|> value (string "!=") InEq
   ws
   right <- exprParser
   ws

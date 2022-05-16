@@ -96,30 +96,30 @@ instance Show Transition where
 
 data Variable
   = Variable
-    { typename :: String
-    , varname  :: String
-    , marks    :: Int
+    { typeName :: String
+    , varName  :: String
     , binds    :: [(Variable, Variable)]
     }
+    deriving (Eq, Ord)
 
-varnamer ""  = ""
-varnamer "0" = "₀"
-varnamer "1" = "₁"
-varnamer "2" = "₂"
-varnamer "3" = "₃"
-varnamer "4" = "₄"
-varnamer "5" = "₅"
-varnamer "6" = "₆"
-varnamer "7" = "₇"
-varnamer "8" = "₈"
-varnamer "9" = "₉"
-varnamer nam = "_" ++ nam
+varNamer :: String -> String
+varNamer ""  = ""
+varNamer "0" = "₀"
+varNamer "1" = "₁"
+varNamer "2" = "₂"
+varNamer "3" = "₃"
+varNamer "4" = "₄"
+varNamer "5" = "₅"
+varNamer "6" = "₆"
+varNamer "7" = "₇"
+varNamer "8" = "₈"
+varNamer "9" = "₉"
+varNamer nam = "_" ++ nam
 
 instance Show Variable where
-  show Variable { typename, varname, marks, binds } = concat
-    [ typename
-    , varnamer varname
-    , replicate marks '\''
+  show Variable { typeName, varName, binds } = concat
+    [ typeName
+    , varNamer varName
     , concatMap (\(var, val) -> "[" ++ show var ++ "↦" ++ show val ++ "]") binds
     ]
 
