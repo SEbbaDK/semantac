@@ -1,0 +1,56 @@
+meta lessThan = (Bool x Bool) -> Bool
+
+rule Equals-1
+s |- a_1 ->a v_1
+s |- a_2 ->a v_2
+---
+s |- a_1 "=" a_2 ->b tt
+if v_1 = v_2
+
+rule Equals-2
+s |- a_1 ->a v_1
+s |- a_2 ->a v_2
+---
+s |- a_1 "=" a_2 ->b ff
+if v_1 ≠ v_2
+
+rule LessThan-1
+s |- a_1 ->a v_1
+s |- a_2 ->a v_2
+---
+s |- a_1 "<" a_2 ->b tt
+if lessThan(v_1, v_2) = tt
+
+rule LessThan-2
+s |- a_1 ->a v_1
+s |- a_2 ->a v_2
+---
+s |- a_1 "<" a_2 ->b ff
+if lessThan(v_1, v_2) = ff
+
+rule Not-1
+s |- b ->b tt
+---
+s |- "¬" b ->b ff
+
+rule Not-2
+s |- b ->b ff
+---
+s |- "¬" b ->b tt
+
+rule Parentheses
+s |- b_1 ->b v
+---
+s |- "(" b_1 ")" ->b v
+
+rule And-1
+s |- b_1 ->b tt
+s |- b_2 ->b tt
+---
+s |- b_1 "∧" b_2 ->b tt
+
+rule And-2
+s |- b_i ->b ff
+---
+s |- b_1 "∧" b_2 ->b ff
+where i ∈ {1, 2}

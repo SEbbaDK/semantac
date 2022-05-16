@@ -1,0 +1,43 @@
+category a in ?? = Syntax
+category i in Int = Integer
+
+system ?? ->a ??
+
+meta add = (Int x Int) -> Int
+meta sub = (Int x Int) -> Int
+meta mul = (Int x Int) -> Int
+
+rule Plus
+s |- a_1 ->a i_1
+s |- a_2 ->a i_2
+---
+s |- a_1 "+" a_2 ->a i
+where i = add(i_1, i_2)
+
+rule Subtract
+s |- a_1 ->a i_1
+s |- a_2 ->a i_2
+---
+s |- a_1 "-" a_2 ->a i
+where i = sub(i_1, i_2)
+
+rule Multiply
+s |- a_1 ->a i_1
+s |- a_2 ->a i_2
+---
+s |- a_1 "*" a_2 ->a i
+where i = mul(i_1, i_2)
+
+rule Parentheses
+s |- a_1 ->a i_1
+---
+s |- "(" a_1 ")" ->a i_1
+
+rule Number
+s |- n ->a i
+if N[n] = i
+
+rule Var
+s[x |-> i]
+---
+s |- x ->a i

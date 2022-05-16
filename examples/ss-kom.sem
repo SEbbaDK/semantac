@@ -1,0 +1,28 @@
+
+rule Ass
+<x ":=" a, s> => s[x |-> v]
+where s |- a ->a v
+
+rule Skip
+<"skip", s> => s
+
+rule Comp-1
+<S_1, s> => <S_1', s'>
+---
+<S_1 ";" S_2, s> => <S_1' ";" S_2, s'>
+
+rule Comp-2
+<S_1, s> => s'
+---
+<S_1 ";" S_2, s> => <S_2 ";" s'>
+
+rule If-True
+<"if" b "then" S_1 "else" S_2, s> => <S_1, s>
+if s |- b ->b tt
+
+rule If-False
+<"if" b "then" S_1 "else" S_2, s> => <S_2, s>
+if s |- b ->b ff
+
+rule While
+<"while" b "do" S, s> => <"if" b "then" (S ";" "while" b "do" S) "else" "skip", s>

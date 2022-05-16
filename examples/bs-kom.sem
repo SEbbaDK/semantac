@@ -1,0 +1,39 @@
+category s in Env = ??
+
+system Syntax x Env -> Env
+
+rule Ass
+<x ":=" a, s> -> s[x |-> v]
+where s |- a ->a v
+
+rule Skip
+<"skip", s> -> s
+
+rule Comp
+<S_1, s> -> s''
+<S_2, s''> -> s'
+---
+<S_1 ";" S_2, s> -> s'
+
+rule If-True
+<S_1, s> -> s'
+---
+<"if" b "then" S_1 "else" S_2, s> -> s'
+if s |- b ->b tt
+
+rule If-False
+<S_2, s> -> s'
+---
+<"if" b "then" S_1 "else" S_2, s> -> s'
+if s |- b ->b ff
+
+rule While-True
+<S, s> -> s''
+<"while" b "do" S, s''> -> s'
+---
+<"while" b "do" S, s> -> s
+if s |- b ->b tt
+
+rule While-False
+<"while" b "do" S, s> -> s
+if s |- b ->b ff
