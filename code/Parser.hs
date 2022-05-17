@@ -106,11 +106,14 @@ typeParser = let
     Nothing -> return l
     Just f  -> fmap (f l) typeParser
 
+functionNameParser :: Parser String
+functionNameParser = many alphaNumChar
+
 declarationParser :: Parser Declaration
 declarationParser = do
   try (string "meta")
   ws
-  name <- many alphaNumChar
+  name <- functionNameParser
   ws
   char '='
   ws
@@ -204,10 +207,10 @@ exprParamParser = betweenS "(" (exprParser `sepBy` some (string "," >> ws)) ")"
 
 exprParser :: Parser Expr
 exprParser = do
-  lhs <- variableParser
-  params <- many exprParamParser
+  lhs <- functionNameParser
+  params <- exprParamParser
   ws
-  return $ foldl ECall (EVar lhs) params
+  return $ ECall lhs params
 
 eqParser :: Parser Equality
 eqParser = do

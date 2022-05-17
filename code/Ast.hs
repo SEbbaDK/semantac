@@ -10,7 +10,7 @@ data Specification
   = Specification [Loc Declaration] [Loc Category] [Loc System] [Loc Rule]
 
 data Declaration
-  = Declaration String Type
+  = Declaration { fName :: String, fType :: Type}
 
 data Category
   = Category
@@ -155,9 +155,9 @@ instance Show Equality where
 
 data Expr
   = EVar Variable
-  | ECall Expr [Expr]
+  | ECall String [Expr]
 
 instance Show Expr where
   show (EVar s)    = show s
-  show (ECall o e) = show o ++ "(" ++ intercalate ", " (map show e) ++ ")"
+  show (ECall o e) = o ++ "(" ++ intercalate ", " (map show e) ++ ")"
 

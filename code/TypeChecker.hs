@@ -12,19 +12,18 @@ import           Control.Monad.State (MonadState (get, put), StateT (runStateT),
                                       execStateT, mapStateT, modify)
 import           Data.Bifunctor      (Bifunctor (bimap))
 import           Data.List           (find)
-import           Data.Map.Strict     as Map (Map, map, insert, lookup)
+import           Data.Map.Strict     as Map (Map, insert, lookup)
 import           Errors
 import           Loc
 import           Types
-
 import Debug.Trace
-import Data.Foldable (foldlM)
 
 data TCState
   = TCState
     { nextTypeVar_ :: Int
-    , subs         :: Substitutions
     , bindings     :: Map Variable TypeVar
+    , subs         :: Substitutions
+    , declarations :: [Loc Declaration]
     , categories   :: [Loc Category]
     , systems      :: [Loc System]
     , contextStack :: ContextStack
@@ -48,13 +47,13 @@ check (Specification declarations categories systems rules) =
             bimap
                 (fmap (RuleError ruleName))
                 (\binds -> insert ruleName binds allBinds)
-                (checkRule categories systems rule)
+                (checkRule declarations categories systems rule)
             where Rule { name = ruleName } = unLoc rule
         f (Left x) rule = Left x
 
-checkRule :: [Loc Category] -> [Loc System] -> Loc Rule -> Either (Error RuleError) (Map Variable Type)
-checkRule categories systems rule = do
-    let state = TCState 1 mempty mempty categories systems [CRule rule]
+checkRule :: [Loc Declaration] -> [Loc Category] -> [Loc System] -> Loc Rule -> Either (Error RuleError) (Map Variable Type)
+checkRule declarations categories systems rule = do
+    let state = TCState 1 mempty mempty declarations categories systems [CRule rule]
     TCState {bindings, subs} <- execStateT (checkRuleHelper rule) state
     return $ fmap (subst subs . TVar) bindings
 
@@ -69,7 +68,7 @@ checkPremise :: Loc Premise -> TCResult RuleError ()
 checkPremise (Loc l (PTransition trans)) =
     context (CPremise (Loc l (PTransition trans))) $ checkTransition (Loc l  trans)
 checkPremise (Loc l (PEquality eq)) =
-    checkEquality eq
+    checkEquality l eq
 
 checkTransition :: Loc Transition -> TCResult RuleError ()
 checkTransition (Loc l trans) = do
@@ -94,15 +93,15 @@ checkTransitionHelper sys Transition { before, after } = do
             Error (s, ConfTypeMismatch use def $ Loc (pos sysdef) $ unLoc sys)
         mismatch _ _ e = e
 
-checkEquality :: Equality -> TCResult RuleError ()
-checkEquality (Eq l r)   = checkEqualityHelper l r
-checkEquality (InEq l r) = checkEqualityHelper l r
+checkEquality :: Pos -> Equality -> TCResult RuleError ()
+checkEquality pos (Eq l r)   = checkEqualityHelper pos pos l r
+checkEquality pos (InEq l r) = checkEqualityHelper pos pos l r
 
-checkEqualityHelper :: Expr -> Expr -> TCResult RuleError ()
-checkEqualityHelper l r = do
-    t1 <- inferExpr l
-    t2 <- inferExpr r
-    unify fakePos fakePos t1 t2
+checkEqualityHelper :: Pos -> Pos -> Expr -> Expr -> TCResult RuleError ()
+checkEqualityHelper lp rp l r = do
+    t1 <- inferExpr lp l
+    t2 <- inferExpr rp r
+    unify lp rp t1 t2
     return ()
 
 -- Inference
@@ -125,9 +124,15 @@ inferVar :: Monad m => Variable -> TypeChecker m Type
 inferVar x = TVar <$> typeVarOf x
 
 
-inferExpr :: Expr -> TCResult RuleError Type
-inferExpr (EVar v)            = inferVar v
-inferExpr (ECall base params) = error "Can't infer calls yet"
+inferExpr :: Pos -> Expr -> TCResult RuleError Type
+inferExpr pos (EVar v)            = inferVar v
+inferExpr pos (ECall f args) = do
+    tf <- lookupFunction pos f
+    ta <- TCross <$> mapM (inferExpr pos) args
+    tr <- TVar <$> newTypeVar
+    tf <- unify pos pos tf (TFunc ta tr) 
+    TCState { subs } <- get
+    return $ subst subs tr
 
 
 -- Unification
@@ -187,8 +192,15 @@ lookupSystem :: Pos -> String -> TCResult RuleError (Loc System)
 lookupSystem pos systemArrow = do
     TCState { systems } <- get
     case find ((systemArrow ==) . arrow . unLoc) systems of
-        Nothing  -> returnError (UndefinedArrow (Loc pos systemArrow))
         Just sys -> return sys
+        Nothing  -> returnError (UndefinedArrow (Loc pos systemArrow))
+
+lookupFunction :: Pos -> String -> TCResult RuleError Type
+lookupFunction pos name = do
+    TCState { declarations } <- get
+    case find ((name ==) . fName . unLoc) declarations of
+        Just dec -> return $ fType (unLoc dec)
+        Nothing  -> returnError (UndefinedVar (Loc pos name))
 
 newTypeVar :: Monad m => TypeChecker m TypeVar
 newTypeVar = do
@@ -220,10 +232,8 @@ bindVar tv t =
 -- substTC :: Monad m => Type -> TypeChecker m Type
 -- substTC t = do
 --     TCState { subs } <- get
---     case subst subs t of
---         TNamed x -> lookupType x
---         t        -> return t
---
+--     subst subs t
+
 -- \texttt{substTC} performs a substitution using the current substitution map. 
 -- The \texttt{subst} function traverses the given type and replaces type variables with the types that they map to in the substitution map if they are defined there.
 
