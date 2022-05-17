@@ -10,8 +10,9 @@ import           Options.Applicative
 import           Parser                (doParse)
 import           System.IO             (hPutStr, stderr)
 import           Text.Megaparsec.Error (errorBundlePretty)
-import           TypeChecker           (check)
+import           TypeChecker           (typeCheck)
 import           Types
+import           Binding               (bindCheck)
 
 putErr :: String -> IO ()
 putErr = hPutStr stderr
@@ -43,7 +44,10 @@ cli Args {file, printast, printlatex = False, printBinds} = do
       putErr $ "Parsing Error: " ++ errorBundlePretty err
     Right ast -> do
       when printast (print ast)
-      case check ast of
+      putStrLn $ case bindCheck ast of
+        Nothing -> "No bind errors"
+        Just e -> "bind errors"
+      case typeCheck ast of
         Right allBinds  -> do
           putStrLn "Checks passed"
           when printBinds (forM_ allBinds (putStrLn . showBinds))

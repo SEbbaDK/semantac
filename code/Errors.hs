@@ -100,7 +100,7 @@ code c s = "\x1b[" ++ c ++ "m" ++ s ++ "\x1b[m"
 bold = code "1"
 underline = code "4"
 highlight = code "32"
-header = bold . (code "30:42")
+header = bold . (code "37:42")
 
 data Context
   = CRule (Loc Rule)

@@ -140,6 +140,7 @@ instance Show Conf where
 data Premise
   = PTransition Transition
   | PEquality Equality
+  | PDefinition Expr Expr
 
 instance Show Premise where
   show (PTransition trans) = show trans

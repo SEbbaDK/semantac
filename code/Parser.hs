@@ -223,19 +223,22 @@ exprParser = do
   return $ foldl callify (EVar lhs) params
     where callify base param = ECall base param
 
-eqParser :: Parser Equality
-eqParser = do
+eqDefParser :: Parser Premise
+eqDefParser = do
   left <- exprParser
   ws
-  eq <- try (value (string "==") Eq) <|> (value (string "!=") InEq)
+  eq <- try (value (string "==") $ Just Eq) <|> try (value (string "!=") (Just InEq)) <|>
+        try (value (string "=") $ Nothing) <|> value (string ":=") Nothing
   ws
   right <- exprParser
   ws
-  return $ eq left right
+  return $ case eq of
+    Just e  -> PEquality $ e left right
+    Nothing -> PDefinition left right
 
 premiseParser :: Parser Premise
 premiseParser = do
-  p <- fmap PTransition transParser <|> fmap PEquality eqParser
+  p <- try (fmap PTransition transParser) <|> eqDefParser
   ws
   return p
 

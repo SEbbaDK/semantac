@@ -38,8 +38,8 @@ type TCResult e a = TypeChecker (Either (Error e)) a
 type CheckResult = Map String (Map String Type)
 type SpecificationResult = Either (Error SpecificationError) CheckResult
 
-check :: Specification -> SpecificationResult
-check (Specification declarations domains systems rules) =
+typeCheck :: Specification -> SpecificationResult
+typeCheck (Specification declarations domains systems rules) =
     foldl f (Right mempty) rules
     where
         f :: SpecificationResult -> Loc Rule -> SpecificationResult
