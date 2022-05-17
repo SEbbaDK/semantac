@@ -46,7 +46,7 @@ cli Args {file, printast, printlatex = False, printBinds} = do
       when printast (print ast)
       putStrLn $ case bindCheck ast of
         Nothing -> "No bind errors"
-        Just e -> "bind errors"
+        Just e -> unlines e
       case typeCheck ast of
         Right allBinds  -> do
           putStrLn "Checks passed"
