@@ -5,6 +5,7 @@ import           Ast
 import           Data.List (intercalate)
 import           Loc       (Loc (Loc), Pos, pos, showPos, showPosInSource)
 import           Types     (Type (TVar), TypeVar)
+import           Pretty
 
 newtype Error a
   = Error (ContextStack, a)
@@ -63,14 +64,14 @@ showRuleError src (TypeMismatch (Loc p1 t1) (Loc p2 t2)) =
   , showPosInSource p1 src
   , header $ "  and: " ++ showPos p2
   , showPosInSource p2 src
-  , bold $ "  Expected: " ++ highlight (show t2)
-  , bold $ "  Received: " ++ highlight (show t1)
+  , bold $ "  Expected: " ++ highlight (pprint t2)
+  , bold $ "  Received: " ++ highlight (pprint t1)
   ]
 showRuleError src (InifiniteType tv (Loc p t)) =
   -- This message is kinda impossible to understand I think.
   -- Failure of the "occurs check" is the terminology in the literature for this type of error.
   [ header $ "Infinite type. "
-  , "  Type variable " ++ show (TVar tv) ++ " occurs in " ++ show t
+  , "  Type variable " ++ pprint (TVar tv) ++ " occurs in " ++ pprint t
   , showPosInSource p src
   ]
 showRuleError src (UndefinedVar (Loc p name)) =
@@ -89,9 +90,9 @@ showRuleError src (ConfTypeMismatch (Loc usedPos usedType) (Loc defPos defType) 
     , ""
     , "The type of the configuration at " ++ showPos usedPos ++ " does not match the type given in the definition of the transition system: " ++ arrow
     , ""
-    , bold $ "  The type of the configuration: " ++ highlight (show usedType)
+    , bold $ "  The type of the configuration: " ++ highlight (pprint usedType)
     , showPosInSource usedPos src
-    , bold $ "  The system specifies that it should be: " ++ highlight (show defType)
+    , bold $ "  The system specifies that it should be: " ++ highlight (pprint defType)
     , showPosInSource defPos src
     , bold $ "These two types should match, but they do not."
     ]
