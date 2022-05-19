@@ -7,17 +7,17 @@ import           Loc       (Loc (Loc), Pos, pos, showPos, showPosInSource)
 import           Types     (Type (TVar), TypeVar)
 
 newtype Error a
-    = Error (ContextStack, a)
+  = Error (ContextStack, a)
 
 instance Functor Error where
     fmap f (Error (ctx, val)) = Error (ctx, f val)
 
 
 data SpecificationError
-    = CategoryError CategoryError
-    | SystemError SystemError
-    | RuleError String RuleError
-    | MultiRuleDefinitions [Loc String]
+  = CategoryError CategoryError
+  | SystemError SystemError
+  | RuleError String RuleError
+  | MultiRuleDefinitions [Loc String]
 
 -- Todo: figure out what errors you can have here
 data CategoryError = CatError
@@ -26,15 +26,15 @@ data CategoryError = CatError
 data SystemError = SysError
 
 data RuleError
-    = TypeMismatch (Loc Type) (Loc Type)
-    -- I'm not sure if the InfiniteType error is possible given that all
-    -- functions have to be explicitly declared upfront with their type
-    -- signatures.
-    | InifiniteType TypeVar (Loc Type)
-    | UndefinedVar (Loc String)
-    | UndefinedArrow (Loc String)
-    | UndefinedType (Loc String)
-    | ConfTypeMismatch (Loc Type) (Loc Type) (Loc System)
+  = TypeMismatch (Loc Type) (Loc Type)
+  -- I'm not sure if the InfiniteType error is possible given that all
+  -- functions have to be explicitly declared upfront with their type
+  -- signatures.
+  | InifiniteType TypeVar (Loc Type)
+  | UndefinedVar (Loc String)
+  | UndefinedArrow (Loc String)
+  | UndefinedType (Loc String)
+  | ConfTypeMismatch (Loc Type) (Loc Type) (Loc SystemDecl)
 
 type Lines = [String]
 
@@ -89,19 +89,16 @@ showRuleError src err =
             , showPosInSource p src
             ]
         ConfTypeMismatch (Loc usedPos usedType) (Loc defPos defType) (Loc confpos sys) ->
-            let
-                System { arrow, initial, final } = sys
-            in
-                [ header $ "Mismatch between configuration and defined transition system."
-                , ""
-                , "The type of the configuration at " ++ showPos usedPos ++ " does not match the type given in the definition of the transition system: " ++ arrow
-                , ""
-                , bold $ "  The type of the configuration: " ++ highlight (show usedType)
-                , showPosInSource usedPos src
-                , bold $ "  The system specifies that it should be: " ++ highlight (show defType)
-                , showPosInSource defPos src
-                , bold $ "These two types should match, but they do not."
-                ]
+            [ header $ "Mismatch between configuration and defined transition system."
+            , ""
+            , "The type of the configuration at " ++ showPos usedPos ++ " does not match the type given in the definition of the transition system: " ++ arrow sys
+            , ""
+            , bold $ "  The type of the configuration: " ++ highlight (show usedType)
+            , showPosInSource usedPos src
+            , bold $ "  The system specifies that it should be: " ++ highlight (show defType)
+            , showPosInSource defPos src
+            , bold $ "These two types should match, but they do not."
+            ]
 
 code c s = "\x1b[" ++ c ++ "m" ++ s ++ "\x1b[m"
 bold = code "1"
@@ -110,17 +107,17 @@ highlight = code "32"
 header = bold . code "30:42"
 
 data Context
-    = CRule (Loc Rule)
-    | CCategory (Loc Category)
-    | CSystem (Loc System)
-    | CSpec (Loc Type)
-    | CPremise (Loc Premise)
-    | CEquality (Loc Expr) (Loc Expr)
-    | CInequality (Loc Expr) (Loc Expr)
-    | CConclusion (Loc Transition)
-    | CConf (Loc Conf)
-    | CConfSyntaxList [Loc Conf]
-    | CConfBinding (Loc Conf) (Loc Conf) (Loc Conf)
+  = CRule (Loc Rule)
+  | CCategory (Loc CategoryDecl)
+  | CSystem (Loc SystemDecl)
+  | CSpec (Loc Type)
+  | CPremise (Loc Premise)
+  | CEquality (Loc Expr) (Loc Expr)
+  | CInequality (Loc Expr) (Loc Expr)
+  | CConclusion (Loc Transition)
+  | CConf (Loc Conf)
+  | CConfSyntaxList [Loc Conf]
+  | CConfBinding (Loc Conf) (Loc Conf) (Loc Conf)
 
 type ContextStack = [Context]
 

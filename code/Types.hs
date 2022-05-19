@@ -9,8 +9,8 @@ import           Debug.Trace         (trace)
 import           Loc
 
 data Type
-  = TNamed String
-  | TCategory String
+  = TAlias String
+  | TPrimitive String
   | TCross [Type]
   | TUnion [Type]
   | TFunc Type Type
@@ -18,22 +18,18 @@ data Type
   deriving (Eq, Ord)
 
 instance Show Type where
-    show (TNamed name)    = name
-    show (TCategory name) = name
-    show (TCross xs)      = intercalate " ⨯ " (fmap show xs)
-    show (TUnion xs)      = intercalate " ∪ " (fmap show xs)
-    show (TFunc a b)      = show a ++ " → " ++ show b
-    show (TVar tv)        = show tv
+    show (TAlias name)     = name
+    show (TPrimitive name) = name
+    show (TCross xs)       = intercalate " ⨯ " (fmap show xs)
+    show (TUnion xs)       = intercalate " ∪ " (fmap show xs)
+    show (TFunc a b)       = show a ++ " → " ++ show b
+    show (TVar tv)         = show tv
 
 tSyntax :: Type
-tSyntax = TCategory "Syntax"
+tSyntax = TPrimitive "\"syntax\""
 
-tIdentifier :: Type
-tIdentifier = TCategory "Id"
-
-tInteger :: Type
-tInteger = TCategory "Int"
-
+tBool :: Type
+tBool = TPrimitive "\"bool\""
 
 newtype TypeVar
   = TypeVar Int
@@ -48,22 +44,22 @@ instance Show TypeVar where
                 toEnum (fromEnum 'a' + r) : intToAlphaRev q
 
 typeVars :: Type -> [TypeVar]
-typeVars (TNamed name)    = []
-typeVars (TCategory name) = []
-typeVars (TCross xs)      = concatMap typeVars xs
-typeVars (TUnion xs)      = concatMap typeVars xs
-typeVars (TVar v)         = [v]
-typeVars (TFunc a b)      = typeVars a ++ typeVars b
+typeVars (TAlias name)     = []
+typeVars (TPrimitive name) = []
+typeVars (TCross xs)       = concatMap typeVars xs
+typeVars (TUnion xs)       = concatMap typeVars xs
+typeVars (TVar v)          = [v]
+typeVars (TFunc a b)       = typeVars a ++ typeVars b
 
 type Substitutions = Map TypeVar Type
 
 subst :: Substitutions -> Type -> Type
-subst subs (TNamed x)    = TNamed x
-subst subs (TCategory x) = TCategory x
-subst subs (TCross xs)   = TCross (fmap (subst subs) xs)
-subst subs (TUnion xs)   = TUnion (fmap (subst subs) xs)
-subst subs (TFunc a b)   = TFunc (subst subs a) (subst subs b)
-subst subs (TVar tv)     = fromMaybe (TVar tv) (Map.lookup tv subs)
+subst subs (TAlias x)     = TAlias x
+subst subs (TPrimitive x) = TPrimitive x
+subst subs (TCross xs)    = TCross (fmap (subst subs) xs)
+subst subs (TUnion xs)    = TUnion (fmap (subst subs) xs)
+subst subs (TFunc a b)    = TFunc (subst subs a) (subst subs b)
+subst subs (TVar tv)      = fromMaybe (TVar tv) (Map.lookup tv subs)
 
 
 

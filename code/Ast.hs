@@ -7,46 +7,54 @@ import           Loc
 import           Types
 
 data Specification
-  = Specification [Loc Declaration] [Loc Category] [Loc System] [Loc Rule]
-
-data Declaration
-  = Declaration { fName :: String, fType :: Type}
-
-data Category
-  = Category
-    { cName    :: String
-    , variable :: String
-    , cType    :: Type
+  = Specification
+    { sTerms      :: [Loc TermDecl]
+    , sCategories :: [Loc CategoryDecl]
+    , sSystems    :: [Loc SystemDecl]
+    , sRules      :: [Loc Rule]
     }
 
-data System
-  = System
+data TermDecl
+  = TermDecl
+    { dName :: String
+    , dType :: Type
+    }
+
+data CategoryDecl
+  = CategoryDecl
+    { cName :: String
+    , cType :: Type
+    , cIn   :: Bool
+    }
+
+data SystemDecl
+  = SystemDecl
     { arrow   :: String
     , initial :: Loc Type
     , final   :: Loc Type
     }
 
 instance Show Specification where
-  show (Specification declarations categories systems rules) =
+  show Specification {sTerms, sCategories, sSystems, sRules} =
     unlines lines
     where
       lines = intercalate [""]
-        [ map show declarations
-        , map show categories
-        , map show systems
-        , intersperse "" (map show rules)
+        [ map show sTerms
+        , map show sCategories
+        , map show sSystems
+        , intersperse "" (map show sRules)
         ]
 
-instance Show Declaration where
-  show (Declaration name spec) =
-    unwords [ "meta", name, "=", show spec ]
+instance Show TermDecl where
+  show TermDecl {dName, dType} =
+    unwords [ "meta", dName, "=", show dType ]
 
-instance Show Category where
-  show Category {cName, variable, cType} =
-    unwords [ "category", variable, "in", cName, ":", show cType ]
+instance Show CategoryDecl where
+  show CategoryDecl { cName, cType } =
+    unwords [ "category", cName, "=", show cType ]
 
-instance Show System where
-  show System {arrow, initial, final} =
+instance Show SystemDecl where
+  show SystemDecl {arrow, initial, final} =
     unwords [ "system", show initial, arrow, show final ]
 
 data Rule
@@ -100,7 +108,7 @@ data Variable
     , varName  :: String
     , binds    :: [(Variable, Variable)]
     }
-    deriving (Eq, Ord)
+  deriving (Eq, Ord)
 
 varNamer :: String -> String
 varNamer ""  = ""

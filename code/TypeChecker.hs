@@ -13,19 +13,19 @@ import           Control.Monad.State (MonadState (get, put), StateT (runStateT),
 import           Data.Bifunctor      (Bifunctor (bimap))
 import           Data.List           (find)
 import           Data.Map.Strict     as Map (Map, insert, lookup)
+import           Debug.Trace
 import           Errors
 import           Loc
 import           Types
-import Debug.Trace
 
 data TCState
   = TCState
     { nextTypeVar_ :: Int
     , bindings     :: Map Variable TypeVar
     , subs         :: Substitutions
-    , declarations :: [Loc Declaration]
-    , categories   :: [Loc Category]
-    , systems      :: [Loc System]
+    , terms        :: [Loc TermDecl]
+    , categories   :: [Loc CategoryDecl]
+    , systems      :: [Loc SystemDecl]
     , contextStack :: ContextStack
     }
 
@@ -39,21 +39,31 @@ type CheckResult = Map String (Map Variable Type)
 type SpecificationResult = Either (Error SpecificationError) CheckResult
 
 check :: Specification -> SpecificationResult
-check (Specification declarations categories systems rules) =
-    foldl f (Right mempty) rules
+check spec =
+    foldl f (Right mempty) (sRules spec)
     where
         f :: SpecificationResult -> Loc Rule -> SpecificationResult
         f (Right allBinds) rule =
             bimap
                 (fmap (RuleError ruleName))
                 (\binds -> insert ruleName binds allBinds)
-                (checkRule declarations categories systems rule)
+                (checkRule spec rule)
             where Rule { name = ruleName } = unLoc rule
         f (Left x) rule = Left x
 
-checkRule :: [Loc Declaration] -> [Loc Category] -> [Loc System] -> Loc Rule -> Either (Error RuleError) (Map Variable Type)
-checkRule declarations categories systems rule = do
-    let state = TCState 1 mempty mempty declarations categories systems [CRule rule]
+checkRule ::
+    Specification
+    -> Loc Rule
+    -> Either (Error RuleError) (Map Variable Type)
+checkRule Specification {sTerms, sCategories, sSystems, sRules} rule = do
+    let state = TCState
+            { nextTypeVar_ = 1
+            , bindings = mempty
+            , subs = mempty
+            , terms = sTerms
+            , categories = sCategories
+            , systems = sSystems
+            , contextStack = [CRule rule] }
     TCState {bindings, subs} <- execStateT (checkRuleHelper rule) state
     return $ fmap (subst subs . TVar) bindings
 
@@ -75,9 +85,9 @@ checkTransition (Loc l trans) = do
     sys <- lookupSystem l (system trans)
     checkTransitionHelper sys trans
 
-checkTransitionHelper :: Loc System -> Transition -> TCResult RuleError ()
+checkTransitionHelper :: Loc SystemDecl -> Transition -> TCResult RuleError ()
 checkTransitionHelper sys Transition { before, after } = do
-    let Loc l System { initial, final } = sys
+    let Loc l SystemDecl { initial, final } = sys
     context (CConf before) $ do
         tl <- infer before
         let tr = unLoc initial
@@ -88,7 +98,7 @@ checkTransitionHelper sys Transition { before, after } = do
         mapError (mismatch sys final) $ unify (pos after) (pos final) tl tr
     return ()
     where
-        mismatch :: Loc System -> Loc Type -> Error RuleError -> Error RuleError
+        mismatch :: Loc SystemDecl -> Loc Type -> Error RuleError -> Error RuleError
         mismatch sys sysdef (Error (s, TypeMismatch use def)) =
             Error (s, ConfTypeMismatch use def $ Loc (pos sysdef) $ unLoc sys)
         mismatch _ _ e = e
@@ -113,7 +123,7 @@ infer (Loc _ (Syntax _))      = return tSyntax
 infer (Loc _ (Var v))         = inferVar v
 -- sure, we can _discover_ variables by traversing the SyntaxList, but since we don't have the grammar of the language
 -- we can't actually generate any constraints from this. We'll just have variables bound to generic type variables.
--- So maybe we shouldn't bother? If a configuration can be an expression, i.e. a function application, then we 
+-- So maybe we shouldn't bother? If a configuration can be an expression, i.e. a function application, then we
 -- could use those to generate constraints.
 -- TODO: decide if we're adding expressions to the configuration or not.
 infer (Loc _ (SyntaxList xs)) = tSyntax <$ mapM infer xs
@@ -127,10 +137,10 @@ inferVar x = TVar <$> typeVarOf x
 inferExpr :: Pos -> Expr -> TCResult RuleError Type
 inferExpr pos (EVar v)            = inferVar v
 inferExpr pos (ECall f args) = do
-    tf <- lookupFunction pos f
+    tf <- lookupMeta pos f
     ta <- TCross <$> mapM (inferExpr pos) args
     tr <- TVar <$> newTypeVar
-    tf <- unify pos pos tf (TFunc ta tr) 
+    tf <- unify pos pos tf (TFunc ta tr)
     TCState { subs } <- get
     return $ subst subs tr
 
@@ -141,20 +151,20 @@ inferExpr pos (ECall f args) = do
 unify :: Pos -> Pos -> Type -> Type -> TCResult RuleError Type
 unify lp rp lt rt =
     case (lt, rt) of
-        (TCategory x1, TCategory x2) | x1 == x2 ->
-            return $ TCategory x1
+        (TPrimitive x1, TPrimitive x2) | x1 == x2 ->
+            return $ TPrimitive x1
         (TCross lts, TCross rts) | length lts == length rts ->
             TCross <$> zipWithM (unify lp rp) lts rts
         (TFunc lat lrt, TFunc rat rrt) -> do
             a <- unify lp rp lat rat
             b <- unify lp rp lrt rrt
             return (TFunc a b)
-        (TNamed x, _)    -> lookupType lp x >>= \lt -> unify lp rp lt rt
+        (TAlias x, _)    -> lookupType lp x >>= \lt -> unify lp rp lt rt
         (TVar tv, _)     -> bindVar tv rt
         (TCross [lt], _) -> unify lp rp lt rt
         (TUnion [lt], _) -> unify lp rp lt rt
         (TUnion lts, _)  -> unifyUnion lp rp lts lts rt
-        (_, TNamed x)    -> unify rp lp (TNamed x) lt
+        (_, TAlias x)    -> unify rp lp (TAlias x) lt
         (_, TVar tv)     -> unify rp lp (TVar tv) lt
         (_, TCross rts)  -> unify rp lp (TCross rts) lt
         (_, TUnion rts)  -> unify rp lp (TUnion rts) lt
@@ -188,18 +198,18 @@ context ctx s = do
         pushContext = modify (\cCtx -> cCtx { contextStack = ctx : contextStack cCtx })
         popContext  = modify (\cCtx -> cCtx { contextStack = drop 1 (contextStack cCtx) })
 
-lookupSystem :: Pos -> String -> TCResult RuleError (Loc System)
+lookupSystem :: Pos -> String -> TCResult RuleError (Loc SystemDecl)
 lookupSystem pos systemArrow = do
     TCState { systems } <- get
     case find ((systemArrow ==) . arrow . unLoc) systems of
         Just sys -> return sys
         Nothing  -> returnError (UndefinedArrow (Loc pos systemArrow))
 
-lookupFunction :: Pos -> String -> TCResult RuleError Type
-lookupFunction pos name = do
-    TCState { declarations } <- get
-    case find ((name ==) . fName . unLoc) declarations of
-        Just dec -> return $ fType (unLoc dec)
+lookupMeta :: Pos -> String -> TCResult RuleError Type
+lookupMeta pos name = do
+    TCState { terms } <- get
+    case find ((name ==) . dName . unLoc) terms of
+        Just dec -> return $ dType (unLoc dec)
         Nothing  -> returnError (UndefinedVar (Loc pos name))
 
 newTypeVar :: Monad m => TypeChecker m TypeVar
@@ -234,7 +244,7 @@ bindVar tv t =
 --     TCState { subs } <- get
 --     subst subs t
 
--- \texttt{substTC} performs a substitution using the current substitution map. 
+-- \texttt{substTC} performs a substitution using the current substitution map.
 -- The \texttt{subst} function traverses the given type and replaces type variables with the types that they map to in the substitution map if they are defined there.
 
 returnError :: a -> TypeChecker (Either (Error a)) b

@@ -50,7 +50,7 @@ systemNameParser =
   where systemNameChars :: [Char]
         systemNameChars = "-=~|>→↓#"
 
-systemParser :: Parser System
+systemParser :: Parser SystemDecl
 systemParser = do
   try (string "system")
   ws
@@ -59,7 +59,7 @@ systemParser = do
   system <- systemNameParser
   ws
   final <- locced typeParser
-  return $ System
+  return $ SystemDecl
     { arrow = system
     , initial = initial
     , final = final
@@ -85,10 +85,8 @@ betweenCharEscaped delimiter = do
 baseTypeParser :: Parser Type
 baseTypeParser =
   between (string "(" >> ws) (ws >> ")") typeParser
-    <|> value (string "Integer") tInteger
-    <|> value (string "Identifier") tIdentifier
-    <|> value (string "Syntax") tSyntax
-    <|> fmap TNamed categoryNameParser
+    <|> fmap TPrimitive (betweenCharEscaped '"')
+    <|> fmap TAlias categoryNameParser
 
 wtry :: Parser a -> Parser a
 wtry p = try $ ws >> p
@@ -109,7 +107,7 @@ typeParser = let
 functionNameParser :: Parser String
 functionNameParser = many alphaNumChar
 
-declarationParser :: Parser Declaration
+declarationParser :: Parser TermDecl
 declarationParser = do
   try (string "meta")
   ws
@@ -119,23 +117,21 @@ declarationParser = do
   ws
   spec <- typeParser
   ws
-  return $ Declaration name spec
+  return $ TermDecl name spec
 
-categoryParser :: Parser Category
-categoryParser = do
-  try (string "category")
+aliasParser :: Parser CategoryDecl
+aliasParser = do
+  try (string "alias")
   ws
-  variable <- some lowerChar
+  name <- categoryNameParser
   ws
-  string "∈" <|> string "in"
+  isIn <- value (try (char '=')) False <|> value (char '∈') True
   ws
-  cName <- categoryNameParser
+  type_ <- typeParser
   ws
-  char '='
-  ws
-  cType <- typeParser
-  ws
-  return $ Category { cName, variable, cType }
+  return $ CategoryDecl name type_ isIn
+
+
 
 
 propertyParser :: Parser Property
@@ -246,27 +242,33 @@ ruleParser = do
     propertyListParser = many (do p <- propertyParser ; ws ; return p)
 
 topParser :: Parser Specification
-topParser =
-  topParser_ (Specification [] [] [] [])
+topParser = do
+  spec <- topParser_ (Specification [] [] [] [])
+  return Specification
+      { sTerms = reverse (sTerms spec)
+      , sCategories = reverse (sCategories spec)
+      , sSystems = reverse (sSystems spec)
+      , sRules = reverse (sRules spec)
+      }
   where
     topParser_ :: Specification -> Parser Specification
-    topParser_ (Specification declarations categories systems rules) = ws >>
-      value eof (Specification (reverse declarations) (reverse categories) (reverse systems) (reverse rules))
+    topParser_ spec = ws >>
+      value eof spec
         <|> try ( do
                 d <- locced declarationParser
-                topParser_ $ Specification (d : declarations) categories systems rules
+                topParser_ $ spec { sTerms = d : sTerms spec }
             )
         <|> try ( do
-                c <- locced categoryParser
-                topParser_ $ Specification declarations (c : categories) systems rules
+                a <- locced aliasParser
+                topParser_ $ spec { sCategories = a : sCategories spec }
             )
         <|> try ( do
                 s <- locced systemParser
-                topParser_ $ Specification declarations categories (s : systems) rules
+                topParser_ $ spec { sSystems = s : sSystems spec }
             )
         <|> try ( do
                 r <- locced ruleParser
-                topParser_ $ Specification declarations categories systems (r : rules)
+                topParser_ $ spec { sRules = r : sRules spec }
             )
 
 doParse :: String -> String -> Either (ParseErrorBundle Text Void) Specification
