@@ -15,15 +15,7 @@ data Type
   | TUnion [Type]
   | TFunc Type Type
   | TVar TypeVar
-  deriving (Eq, Ord)
-
-instance Show Type where
-    show (TAlias name)     = name
-    show (TPrimitive name) = name
-    show (TCross xs)       = intercalate " ⨯ " (fmap show xs)
-    show (TUnion xs)       = intercalate " ∪ " (fmap show xs)
-    show (TFunc a b)       = show a ++ " → " ++ show b
-    show (TVar tv)         = show tv
+  deriving (Eq, Ord, Show)
 
 tSyntax :: Type
 tSyntax = TPrimitive "\"syntax\""
@@ -33,15 +25,7 @@ tBool = TPrimitive "\"bool\""
 
 newtype TypeVar
   = TypeVar Int
-  deriving (Eq, Ord)
-
-instance Show TypeVar where
-    show (TypeVar v) = "#" ++ reverse (intToAlphaRev v)
-        where
-            intToAlphaRev n | n <= 0 = []
-            intToAlphaRev n =
-                let (q, r) = quotRem (n - 1) 26 in
-                toEnum (fromEnum 'a' + r) : intToAlphaRev q
+  deriving (Eq, Ord, Show)
 
 typeVars :: Type -> [TypeVar]
 typeVars (TAlias name)     = []
@@ -60,7 +44,6 @@ subst subs (TCross xs)    = TCross (fmap (subst subs) xs)
 subst subs (TUnion xs)    = TUnion (fmap (subst subs) xs)
 subst subs (TFunc a b)    = TFunc (subst subs a) (subst subs b)
 subst subs (TVar tv)      = fromMaybe (TVar tv) (Map.lookup tv subs)
-
 
 
 {-

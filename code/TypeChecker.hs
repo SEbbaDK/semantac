@@ -38,8 +38,8 @@ type TCResult e a = TypeChecker (Either (Error e)) a
 type CheckResult = Map String (Map Variable Type)
 type SpecificationResult = Either (Error SpecificationError) CheckResult
 
-check :: Specification -> SpecificationResult
-check spec =
+typeCheck :: Specification -> SpecificationResult
+typeCheck spec =
     foldl f (Right mempty) (sRules spec)
     where
         f :: SpecificationResult -> Loc Rule -> SpecificationResult
@@ -137,7 +137,7 @@ inferVar x = TVar <$> typeVarOf x
 inferExpr :: Pos -> Expr -> TCResult RuleError Type
 inferExpr pos (EVar v)            = inferVar v
 inferExpr pos (ECall f args) = do
-    tf <- lookupMeta pos f
+    tf <- error "shit" -- lookupMeta pos f
     ta <- TCross <$> mapM (inferExpr pos) args
     tr <- TVar <$> newTypeVar
     tf <- unify pos pos tf (TFunc ta tr)

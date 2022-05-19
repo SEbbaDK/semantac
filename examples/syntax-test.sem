@@ -1,0 +1,10 @@
+system Syntax =>e Syntax
+
+rule TwoTest
+-----------------
+<"+" i> =>e <"5">
+
+rule OneTest
+-------------
+<x> =>e <"5">
+

@@ -119,9 +119,9 @@ declarationParser = do
   ws
   return $ TermDecl name spec
 
-aliasParser :: Parser CategoryDecl
-aliasParser = do
-  try (string "alias")
+categoryParser :: Parser CategoryDecl
+categoryParser = do
+  try (string "category")
   ws
   name <- categoryNameParser
   ws
@@ -159,7 +159,7 @@ variableParser = do
   name <- option "" $ char '_' >> some alphaNumChar
   marks <- many (char '\'')
   binds <- many bindingParser
-  return $ Variable base (name ++ marks) binds
+  return $ Variable base name (length marks) binds
 
 confElementParser :: Parser (Loc Conf)
 confElementParser = do
@@ -206,21 +206,25 @@ exprParser = do
   lhs <- functionNameParser
   params <- exprParamParser
   ws
-  return $ ECall lhs params
+  -- TODO: Make this actually parse expressions properly
+  return $ ECall (EVar $ Variable "" lhs 0 []) params
 
-eqParser :: Parser Equality
-eqParser = do
+eqDefParser :: Parser Premise
+eqDefParser = do
   left <- exprParser
   ws
-  eq <- try (value (string "==") Eq) <|> value (string "!=") InEq
+  eq <- try (value (string "==") $ Just Eq) <|> try (value (string "!=") (Just InEq)) <|>
+        try (value (string "=") $ Nothing) <|> value (string ":=") Nothing
   ws
   right <- exprParser
   ws
-  return $ eq left right
+  return $ case eq of
+    Just e  -> PEquality $ e left right
+    Nothing -> PDefinition left right
 
 premiseParser :: Parser Premise
 premiseParser = do
-  p <- fmap PTransition transParser <|> fmap PEquality eqParser
+  p <- try (fmap PTransition transParser) <|> eqDefParser
   ws
   return p
 
@@ -259,7 +263,7 @@ topParser = do
                 topParser_ $ spec { sTerms = d : sTerms spec }
             )
         <|> try ( do
-                a <- locced aliasParser
+                a <- locced categoryParser
                 topParser_ $ spec { sCategories = a : sCategories spec }
             )
         <|> try ( do
