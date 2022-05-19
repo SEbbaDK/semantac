@@ -14,6 +14,8 @@ rule Add
 
 rule IfOne
 <e1> =>e <i1>
+<e1> =>e <i2>
+i2 == i3
 <e1, x1> =>e <e1', x1'>
 -----------------------------------------------------
 <"if" e1 "then" e2 "else" e3, x> =>e <"if" e1' "then" e2 "else" e3, x1'>
