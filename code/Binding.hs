@@ -24,7 +24,6 @@ data Node = InitNode (Loc Conf)
           | ConcNode (Loc Conf)
           | TransNode Transition
           | DefNode Expr Expr
-          | LeftDefNode Expr Expr
           | EqNode Equality
     deriving (Show, Eq)
 
@@ -33,9 +32,17 @@ deriving instance (Eq Transition)
 deriving instance (Eq Expr)
 deriving instance (Eq Conf)
 
+deriving instance (Ord Equality)
+deriving instance (Ord Transition)
+deriving instance (Ord Expr)
+deriving instance (Ord Conf)
+
 instance Eq a => Eq (Loc a) where
     (==) (Loc _ x) (Loc _ y) =
         x == y
+instance Ord a => Ord (Loc a) where
+    compare (Loc _ x) (Loc _ y) =
+        compare x y
 instance Eq Variable where
     (==) (Variable t1 n1 m1 b1) (Variable t2 n2 m2 b2) =
         t1 == t2 && n1 == n2 && m1 == m2
@@ -52,30 +59,6 @@ instance Ord Variable where
                 else mc
     (<=) v1 v2 =
         GT /= compare v1 v2
-
-dotString s = "\"" ++ replace '"' "\\\"" s ++ "\""
-    where replace char string l = concat $ map (\c -> if c == char then string else [c]) l
-
-dotGraph :: Graph -> String
-dotGraph (start, prems, end) = unlines $ concat $
-	[ [ "digraph G {" ]
-	, [ "node [shape=circle,margin=0,height=0]" ]
-	, concat $ map dotNode (start : end : prems)
-	, [ "}" ]
-	]
-
-edge :: Show a => Show b => a -> b -> String
-edge from to = (dotString $ show from) ++ " -> " ++ (dotString $ show to)
-    where
-
-dotNode :: Node -> [String]
-dotNode n = map (\v -> edge v n) (Set.toList $ reqsOf n) ++
-            map (\v -> edge n v) (Set.toList $ givenBy n) ++
-            [ case n of
-                InitNode c -> dotString (show n) ++ " [shape=rectangle,style=dashed]"
-                ConcNode c -> dotString (show n) ++ " [shape=rectangle,style=dashed]"
-                otherwise -> dotString (show n) ++ " [shape=rectangle]"
-            ]
 
 graphify :: Rule -> Graph
 graphify Rule { name, base, premises, properties } =
@@ -107,7 +90,7 @@ bindCheckRule r =
     res = reqSearch nodesAndVars [] nodes
   in
     case res of
-        Left errors -> Just $ (dotGraph (start, prems, end)) : errors
+        Left errors -> Just $ errors
         Right reqset -> Nothing -- TODO
 
 reqSearch :: [(Node, Set Variable)] -> [Node] -> [Node] -> BindResultOr [Node]
@@ -135,8 +118,7 @@ reqsOf :: Node -> Set Variable
 reqsOf (InitNode _) = Set.empty
 reqsOf (ConcNode c) = varsOfConf c
 reqsOf (TransNode (Transition _ before _)) = varsOfConf before
-reqsOf (DefNode _ _) = error "This should have been collapsed"
-reqsOf (LeftDefNode _ e) = varsOfExpr e
+reqsOf (DefNode _ e) = varsOfExpr e
 reqsOf (EqNode (Eq l r)) = varsOfExpr l `union` varsOfExpr r
 reqsOf (EqNode (InEq l r)) = varsOfExpr l `union` varsOfExpr r
 
@@ -144,8 +126,7 @@ givenBy :: Node -> Set Variable
 givenBy (InitNode c) = varsOfConf c
 givenBy (ConcNode _) = Set.empty
 givenBy (TransNode (Transition _ _ after)) = varsOfConf after
-givenBy (DefNode _ _) = error "This should have been collapsed"
-givenBy (LeftDefNode e _) = varsOfExpr e
+givenBy (DefNode e _) = varsOfExpr e
 givenBy (EqNode _) = Set.empty
 
 combineResults :: BindResult -> BindResult -> BindResult
