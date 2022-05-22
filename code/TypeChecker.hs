@@ -121,12 +121,7 @@ infer (Loc _ (Conf xs))       = TCross <$> mapM infer xs
 infer (Loc _ (Paren e))       = infer e
 infer (Loc _ (Syntax _))      = return tSyntax
 infer (Loc _ (Var v))         = inferVar v
--- sure, we can _discover_ variables by traversing the SyntaxList, but since we don't have the grammar of the language
--- we can't actually generate any constraints from this. We'll just have variables bound to generic type variables.
--- So maybe we shouldn't bother? If a configuration can be an expression, i.e. a function application, then we
--- could use those to generate constraints.
--- TODO: decide if we're adding expressions to the configuration or not.
-infer (Loc _ (SyntaxList xs)) = tSyntax <$ mapM infer xs
+infer (Loc _ (SyntaxList xs)) = return tSyntax
 
 -- TODO: This should make the inferred variable need to be a
 --       function if there is bindings
