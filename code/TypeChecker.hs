@@ -49,13 +49,13 @@ typeCheck spec =
                 (\binds -> insert ruleName binds allBinds)
                 (checkRule spec rule)
             where Rule { name = ruleName } = unLoc rule
-        f (Left x) rule = Left x
+        f (Left e) rule = Left e
 
 checkRule ::
     Specification
     -> Loc Rule
     -> Either (Error RuleError) (Map Variable Type)
-checkRule Specification {sTerms, sCategories, sSystems, sRules} rule = do
+checkRule Specification {sTerms, sCategories, sSystems} rule = do
     let state = TCState
             { nextTypeVar_ = 1
             , bindings = mempty
@@ -70,13 +70,13 @@ checkRule Specification {sTerms, sCategories, sSystems, sRules} rule = do
 
 checkRuleHelper :: Loc Rule -> TCResult RuleError ()
 checkRuleHelper rule = do
-    let Rule {base, premises, properties} = unLoc rule
+    let Rule {base, premises} = unLoc rule
     foldM_ (\() -> checkPremise . fakeLoc) () premises
     context (CConclusion (fakeLoc base)) (checkTransition (fakeLoc base))
 
 checkPremise :: Loc Premise -> TCResult RuleError ()
 checkPremise (Loc l (PTransition trans)) =
-    context (CPremise (Loc l (PTransition trans))) $ checkTransition (Loc l  trans)
+    context (CPremise (Loc l (PTransition trans))) $ checkTransition (Loc l trans)
 checkPremise (Loc l (PEquality eq)) =
     checkEquality l eq
 
@@ -132,7 +132,7 @@ inferVar x = TVar <$> typeVarOf x
 inferExpr :: Pos -> Expr -> TCResult RuleError Type
 inferExpr pos (EVar v)            = inferVar v
 inferExpr pos (ECall f args) = do
-    tf <- error "shit" -- lookupMeta pos f
+    tf <- inferExpr pos f
     ta <- TCross <$> mapM (inferExpr pos) args
     tr <- TVar <$> newTypeVar
     tf <- unify pos pos tf (TFunc ta tr)
@@ -200,8 +200,8 @@ lookupSystem pos systemArrow = do
         Just sys -> return sys
         Nothing  -> returnError (UndefinedArrow (Loc pos systemArrow))
 
-lookupMeta :: Pos -> String -> TCResult RuleError Type
-lookupMeta pos name = do
+lookupTerm :: Pos -> String -> TCResult RuleError Type
+lookupTerm pos name = do
     TCState { terms } <- get
     case find ((name ==) . dName . unLoc) terms of
         Just dec -> return $ dType (unLoc dec)
