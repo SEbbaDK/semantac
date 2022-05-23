@@ -22,7 +22,7 @@ data TCState
   = TCState
     { nextTypeVar_ :: Int
     , bindings     :: Map Variable TypeVar
-    , subs         :: Substitutions
+    , subs         :: Map TypeVar Type
     , terms        :: [Loc TermDecl]
     , categories   :: [Loc CategoryDecl]
     , systems      :: [Loc SystemDecl]
@@ -79,6 +79,8 @@ checkPremise (Loc l (PTransition trans)) =
     context (CPremise (Loc l (PTransition trans))) $ checkTransition (Loc l trans)
 checkPremise (Loc l (PEquality eq)) =
     checkEquality l eq
+checkPremise (Loc loc (PDefinition l r)) =
+    checkEquality loc (Eq l r)
 
 checkTransition :: Loc Transition -> TCResult RuleError ()
 checkTransition (Loc l trans) = do
@@ -116,7 +118,7 @@ checkEqualityHelper lp rp l r = do
 
 -- Inference
 
-infer :: Monad m => Loc Conf -> TypeChecker m Type
+infer :: Loc Conf -> TCResult RuleError Type
 infer (Loc _ (Conf xs))       = TCross <$> mapM infer xs
 infer (Loc _ (Paren e))       = infer e
 infer (Loc _ (Syntax _))      = return tSyntax
@@ -125,8 +127,14 @@ infer (Loc _ (SyntaxList xs)) = return tSyntax
 
 -- TODO: This should make the inferred variable need to be a
 --       function if there is bindings
-inferVar :: Monad m => Variable -> TypeChecker m Type
-inferVar x = TVar <$> typeVarOf x
+inferVar :: Variable -> TCResult RuleError Type
+inferVar Variable { typeName = Just tName } = do
+    TCState { categories } <- get
+    case find ((== tName) . cName . unLoc) categories of
+        Nothing -> returnError $ UndefinedType (fakeLoc tName)
+        Just (Loc _ c) -> return $ cType c
+inferVar x =
+    TVar <$> typeVarOf x
 
 
 inferExpr :: Pos -> Expr -> TCResult RuleError Type

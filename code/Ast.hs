@@ -57,7 +57,7 @@ data Transition
 
 data Variable
   = Variable
-    { typeName :: String
+    { typeName :: Maybe String
     , varName  :: String
     , marks    :: Int
     , binds    :: [(Variable, Variable)]

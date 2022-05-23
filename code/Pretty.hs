@@ -7,6 +7,7 @@ import           Data.List (intercalate, intersperse)
 import Ast
 import Loc
 import Types
+import qualified Data.Maybe
 
 class Pretty a where
       pprint :: a -> String
@@ -66,7 +67,7 @@ instance Pretty Transition where
 
 instance Pretty Variable where
   pprint Variable { typeName, varName, marks, binds } = concat
-    [ typeName
+    [ Data.Maybe.fromMaybe "" typeName
     , varnamer varName
     , replicate marks '\''
     , concatMap (\(var, val) -> "[" ++ pprint var ++ "↦" ++ pprint val ++ "]") binds
