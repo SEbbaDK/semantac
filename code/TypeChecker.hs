@@ -77,10 +77,12 @@ checkRuleHelper rule = do
 checkPremise :: Loc Premise -> TCResult RuleError ()
 checkPremise (Loc l (PTransition trans)) =
     context (CPremise (Loc l (PTransition trans))) $ checkTransition (Loc l trans)
-checkPremise (Loc l (PEquality eq)) =
-    checkEquality l eq
+checkPremise (Loc l (PConstraint ex)) = do
+    ext <- inferExpr l ex
+    unify l l ext tBool
+    return ()
 checkPremise (Loc loc (PDefinition l r)) =
-    checkEquality loc (Eq l r)
+    checkEquality loc loc l r
 
 checkTransition :: Loc Transition -> TCResult RuleError ()
 checkTransition (Loc l trans) = do
@@ -105,12 +107,8 @@ checkTransitionHelper sys Transition { before, after } = do
             Error (s, ConfTypeMismatch use def $ Loc (pos sysdef) $ unLoc sys)
         mismatch _ _ e = e
 
-checkEquality :: Pos -> Equality -> TCResult RuleError ()
-checkEquality pos (Eq l r)   = checkEqualityHelper pos pos l r
-checkEquality pos (InEq l r) = checkEqualityHelper pos pos l r
-
-checkEqualityHelper :: Pos -> Pos -> Expr -> Expr -> TCResult RuleError ()
-checkEqualityHelper lp rp l r = do
+checkEquality :: Pos -> Pos -> Expr -> Expr -> TCResult RuleError ()
+checkEquality lp rp l r = do
     t1 <- inferExpr lp l
     t2 <- inferExpr rp r
     unify lp rp t1 t2
@@ -122,8 +120,16 @@ infer :: Loc Conf -> TCResult RuleError Type
 infer (Loc _ (Conf xs))       = TCross <$> mapM infer xs
 infer (Loc _ (Paren e))       = infer e
 infer (Loc _ (Syntax _))      = return tSyntax
-infer (Loc _ (Var v))         = inferVar v
+infer (Loc _ (Var v))         = inferVarEx v
 infer (Loc _ (SyntaxList xs)) = return tSyntax
+
+inferVarEx :: VariableExpr -> TCResult RuleError Type
+inferVarEx (VRef v) = inferVar v
+inferVarEx (VBind v l r) = do
+    vt <- inferVarEx v
+    lt <- inferVar l
+    rt <- inferExpr fakePos r
+    unify fakePos fakePos vt (TFunc lt rt)
 
 -- TODO: This should make the inferred variable need to be a
 --       function if there is bindings
@@ -138,7 +144,7 @@ inferVar x =
 
 
 inferExpr :: Pos -> Expr -> TCResult RuleError Type
-inferExpr pos (EVar v)            = inferVar v
+inferExpr pos (EVar v)       = inferVarEx v
 inferExpr pos (ECall f args) = do
     tf <- inferExpr pos f
     ta <- TCross <$> mapM (inferExpr pos) args

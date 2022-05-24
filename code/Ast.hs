@@ -10,14 +10,14 @@ data Specification
     , sSystems    :: [Loc SystemDecl]
     , sRules      :: [Loc Rule]
     }
-    deriving (Show)
+    deriving (Show, Eq, Ord)
 
 data TermDecl
   = TermDecl
     { dName :: String
     , dType :: Type
     }
-    deriving (Show)
+    deriving (Show, Eq, Ord)
 
 data CategoryDecl
   = CategoryDecl
@@ -25,7 +25,7 @@ data CategoryDecl
     , cType :: Type
     , cIn   :: Bool
     }
-  deriving (Show)
+  deriving (Show, Eq, Ord)
 
 data SystemDecl
   = SystemDecl
@@ -33,7 +33,7 @@ data SystemDecl
     , initial :: Loc Type
     , final   :: Loc Type
     }
-  deriving (Show)
+  deriving (Show, Eq, Ord)
 
 data Rule
   = Rule
@@ -42,10 +42,10 @@ data Rule
     , premises   :: [Premise]
     , properties :: [Property]
     }
-  deriving (Show)
+  deriving (Show, Eq, Ord)
 
 data Property = NonDeterministic | NonTerminating
-  deriving (Show)
+  deriving (Show, Eq, Ord)
 
 data Transition
   = Transition
@@ -53,12 +53,12 @@ data Transition
     , before :: Loc Conf
     , after  :: Loc Conf
     }
-  deriving (Show)
+  deriving (Show, Eq, Ord)
 
 data VariableExpr
   = VRef Variable
   | VBind VariableExpr Variable Expr
-  deriving (Show)
+  deriving (Show, Eq, Ord)
 
 data Variable
   = Variable
@@ -88,18 +88,18 @@ data Conf
   | Var VariableExpr
   | SyntaxList [Loc Conf]
   | Paren (Loc Conf)
-  deriving (Show)
+  deriving (Show, Eq, Ord)
 
 data Premise
   = PTransition Transition
   | PConstraint Expr
   | PDefinition Expr Expr
-  deriving (Show)
+  deriving (Show, Eq, Ord)
 
 data Expr
   = EVar VariableExpr
   | ECall Expr [Expr]
   | EEq Expr Expr
   | EInEq Expr Expr
-  deriving (Show)
+  deriving (Show, Eq, Ord)
 

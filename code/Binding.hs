@@ -1,4 +1,3 @@
-{-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE StandaloneDeriving #-}
 
 module Binding where
@@ -6,6 +5,7 @@ module Binding where
 import Ast
 import Loc
 import Errors
+import Graph
 
 import qualified Data.Set as Set
 import Data.Set (Set, isSubsetOf, union, unions, intersection, difference)
@@ -18,45 +18,6 @@ unique = nub
 type BindError = String -- SpecificationError
 type BindResult = Maybe [BindError]
 type BindResultOr a = Either [BindError] a
-
-type Graph = (Node, [Node], Node)
-data Node = InitNode (Loc Conf)
-          | ConcNode (Loc Conf)
-          | TransNode Transition
-          | DefNode Expr Expr
-          | EqNode Equality
-    deriving (Show, Eq)
-
-deriving instance (Eq Equality)
-deriving instance (Eq Transition)
-deriving instance (Eq Expr)
-deriving instance (Eq Conf)
-
-deriving instance (Ord Equality)
-deriving instance (Ord Transition)
-deriving instance (Ord Expr)
-deriving instance (Ord Conf)
-
-instance Eq a => Eq (Loc a) where
-    (==) (Loc _ x) (Loc _ y) =
-        x == y
-instance Ord a => Ord (Loc a) where
-    compare (Loc _ x) (Loc _ y) =
-        compare x y
-
-graphify :: Rule -> Graph
-graphify Rule { name, base, premises, properties } =
-    (start, prems, end)
-    where
-        Transition { system, before, after } = base
-        start = InitNode before
-        end   = ConcNode after
-        prems = map premiseToNode premises
-
-premiseToNode :: Premise -> Node
-premiseToNode (PTransition t)   = TransNode t
-premiseToNode (PDefinition a b) = DefNode a b
-premiseToNode (PEquality e)     = EqNode e
 
 bindCheck :: Specification -> BindResult
 bindCheck (Specification decs cats systems rules) = result
@@ -103,29 +64,35 @@ reqsOf (InitNode _) = Set.empty
 reqsOf (ConcNode c) = varsOfConf c
 reqsOf (TransNode (Transition _ before _)) = varsOfConf before
 reqsOf (DefNode _ e) = varsOfExpr e
-reqsOf (EqNode (Eq l r)) = varsOfExpr l `union` varsOfExpr r
-reqsOf (EqNode (InEq l r)) = varsOfExpr l `union` varsOfExpr r
+reqsOf (ConstrNode e) = varsOfExpr e
 
 givenBy :: Node -> Set Variable
 givenBy (InitNode c) = varsOfConf c
 givenBy (ConcNode _) = Set.empty
 givenBy (TransNode (Transition _ _ after)) = varsOfConf after
 givenBy (DefNode e _) = varsOfExpr e
-givenBy (EqNode _) = Set.empty
+givenBy (ConstrNode _) = Set.empty
 
 combineResults :: BindResult -> BindResult -> BindResult
 combineResults Nothing o = o
 combineResults o Nothing = o
 combineResults (Just e1) (Just e2) = Just $ e1 ++ e2
 
-varsOfExpr (EVar v) = Set.singleton v
+varsOfVarExpr :: VariableExpr -> Set Variable
+varsOfVarExpr (VBind v l r) = Set.insert l $ varsOfVarExpr v `union` varsOfExpr r
+varsOfVarExpr (VRef v) = Set.singleton v
+
+varsOfExpr :: Expr -> Set Variable
+varsOfExpr (EVar  v)   = varsOfVarExpr v
 varsOfExpr (ECall e p) = (varsOfExpr e) `union` (unions $ map varsOfExpr p)
+varsOfExpr (EEq   l r) = varsOfExpr l `union` varsOfExpr r
+varsOfExpr (EInEq l r) = varsOfExpr l `union` varsOfExpr r
 
 varsOfConf :: Loc Conf -> Set Variable
 varsOfConf (Loc _ c) = case c of
     Conf cs       -> unions $ map varsOfConf cs
     Syntax _      -> Set.empty
-    Var v         -> Set.singleton v
+    Var v         -> varsOfVarExpr v
     SyntaxList cs -> unions $ map varsOfConf cs
     Paren c       -> varsOfConf c
 

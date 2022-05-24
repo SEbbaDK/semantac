@@ -4,11 +4,17 @@ import           Data.List  (intercalate)
 import           Data.Text  (splitOn)
 import           Data.Tuple (fst)
 
-
 type PosCoord = (String, Int, Int)
 type Pos = (PosCoord, PosCoord)
 data Loc a
   = Loc Pos a
+
+instance Eq a => Eq (Loc a) where
+    (==) (Loc _ x) (Loc _ y) =
+        x == y
+instance Ord a => Ord (Loc a) where
+    compare (Loc _ x) (Loc _ y) =
+        compare x y
 
 unLoc :: Loc a -> a
 unLoc (Loc _ a) = a
