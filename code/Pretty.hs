@@ -7,6 +7,7 @@ import           Data.List (intercalate, intersperse)
 import Ast
 import Loc
 import Types
+import qualified Data.Maybe
 
 class Pretty a where
       pprint :: a -> String

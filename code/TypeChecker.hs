@@ -22,7 +22,7 @@ data TCState
   = TCState
     { nextTypeVar_ :: Int
     , bindings     :: Map Variable TypeVar
-    , subs         :: Substitutions
+    , subs         :: Map TypeVar Type
     , terms        :: [Loc TermDecl]
     , categories   :: [Loc CategoryDecl]
     , systems      :: [Loc SystemDecl]
@@ -49,13 +49,13 @@ typeCheck spec =
                 (\binds -> insert ruleName binds allBinds)
                 (checkRule spec rule)
             where Rule { name = ruleName } = unLoc rule
-        f (Left x) rule = Left x
+        f (Left e) rule = Left e
 
 checkRule ::
     Specification
     -> Loc Rule
     -> Either (Error RuleError) (Map Variable Type)
-checkRule Specification {sTerms, sCategories, sSystems, sRules} rule = do
+checkRule Specification {sTerms, sCategories, sSystems} rule = do
     let state = TCState
             { nextTypeVar_ = 1
             , bindings = mempty
@@ -70,15 +70,17 @@ checkRule Specification {sTerms, sCategories, sSystems, sRules} rule = do
 
 checkRuleHelper :: Loc Rule -> TCResult RuleError ()
 checkRuleHelper rule = do
-    let Rule {base, premises, properties} = unLoc rule
+    let Rule {base, premises} = unLoc rule
     foldM_ (\() -> checkPremise . fakeLoc) () premises
     context (CConclusion (fakeLoc base)) (checkTransition (fakeLoc base))
 
 checkPremise :: Loc Premise -> TCResult RuleError ()
 checkPremise (Loc l (PTransition trans)) =
-    context (CPremise (Loc l (PTransition trans))) $ checkTransition (Loc l  trans)
+    context (CPremise (Loc l (PTransition trans))) $ checkTransition (Loc l trans)
 checkPremise (Loc l (PEquality eq)) =
     checkEquality l eq
+checkPremise (Loc loc (PDefinition l r)) =
+    checkEquality loc (Eq l r)
 
 checkTransition :: Loc Transition -> TCResult RuleError ()
 checkTransition (Loc l trans) = do
@@ -116,28 +118,29 @@ checkEqualityHelper lp rp l r = do
 
 -- Inference
 
-infer :: Monad m => Loc Conf -> TypeChecker m Type
+infer :: Loc Conf -> TCResult RuleError Type
 infer (Loc _ (Conf xs))       = TCross <$> mapM infer xs
 infer (Loc _ (Paren e))       = infer e
 infer (Loc _ (Syntax _))      = return tSyntax
 infer (Loc _ (Var v))         = inferVar v
--- sure, we can _discover_ variables by traversing the SyntaxList, but since we don't have the grammar of the language
--- we can't actually generate any constraints from this. We'll just have variables bound to generic type variables.
--- So maybe we shouldn't bother? If a configuration can be an expression, i.e. a function application, then we
--- could use those to generate constraints.
--- TODO: decide if we're adding expressions to the configuration or not.
-infer (Loc _ (SyntaxList xs)) = tSyntax <$ mapM infer xs
+infer (Loc _ (SyntaxList xs)) = return tSyntax
 
 -- TODO: This should make the inferred variable need to be a
 --       function if there is bindings
-inferVar :: Monad m => Variable -> TypeChecker m Type
-inferVar x = TVar <$> typeVarOf x
+inferVar :: Variable -> TCResult RuleError Type
+inferVar Variable { typeName = Just tName } = do
+    TCState { categories } <- get
+    case find ((== tName) . cName . unLoc) categories of
+        Nothing -> returnError $ UndefinedType (fakeLoc tName)
+        Just (Loc _ c) -> return $ cType c
+inferVar x =
+    TVar <$> typeVarOf x
 
 
 inferExpr :: Pos -> Expr -> TCResult RuleError Type
 inferExpr pos (EVar v)            = inferVar v
 inferExpr pos (ECall f args) = do
-    tf <- error "shit" -- lookupMeta pos f
+    tf <- inferExpr pos f
     ta <- TCross <$> mapM (inferExpr pos) args
     tr <- TVar <$> newTypeVar
     tf <- unify pos pos tf (TFunc ta tr)
@@ -205,8 +208,8 @@ lookupSystem pos systemArrow = do
         Just sys -> return sys
         Nothing  -> returnError (UndefinedArrow (Loc pos systemArrow))
 
-lookupMeta :: Pos -> String -> TCResult RuleError Type
-lookupMeta pos name = do
+lookupTerm :: Pos -> String -> TCResult RuleError Type
+lookupTerm pos name = do
     TCState { terms } <- get
     case find ((name ==) . dName . unLoc) terms of
         Just dec -> return $ dType (unLoc dec)
