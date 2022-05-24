@@ -38,8 +38,8 @@ data SystemDecl
 data Rule
   = Rule
     { name       :: String
-    , base       :: Transition
-    , premises   :: [Premise]
+    , base       :: Loc Transition
+    , premises   :: [Loc Premise]
     , properties :: [Property]
     }
   deriving (Show, Eq, Ord)

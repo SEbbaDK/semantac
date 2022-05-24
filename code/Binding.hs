@@ -15,9 +15,13 @@ import Debug.Trace -- TODO: Remove
 import Data.List (nub)
 unique = nub
 
-type BindError = String -- SpecificationError
+type BindError = SpecificationError
 type BindResult = Maybe [BindError]
 type BindResultOr a = Either [BindError] a
+
+type BindRuleError = RuleError
+type BindRuleResult = Maybe [BindRuleError]
+type BindRuleResultOr a = Either [BindRuleError] a
 
 bindCheck :: Specification -> BindResult
 bindCheck (Specification decs cats systems rules) = result
@@ -35,10 +39,10 @@ bindCheckRule r =
     res = reqSearch nodesAndVars [] nodes
   in
     case res of
-        Left errors -> Just $ errors
+        Left errors -> Just $ map (RuleError $ name $ unLoc r) errors
         Right reqset -> Nothing -- TODO
 
-reqSearch :: [(Node, Set Variable)] -> [Node] -> [Node] -> BindResultOr [Node]
+reqSearch :: [(Node, Set Variable)] -> [Node] -> [Node] -> BindRuleResultOr [Node]
 reqSearch nv seen [] = Right $ unique seen
 reqSearch nv seen (n:xs) = let
     reqs = reqsOf n
@@ -46,7 +50,7 @@ reqSearch nv seen (n:xs) = let
   in
     case pros of
         Left vars -> Left $
-            [ show n ++ " has unfulfilled vars: " ++ unwords (map show $ Set.toList vars) ]
+            [ UndefinedVar n $ Set.toList vars ]
         Right nodes -> reqSearch nv (nodes ++ seen) xs
 
 providers :: [(Node, Set Variable)] -> Set Variable -> Set Variable -> [Node] -> Either (Set Variable) [Node]
@@ -62,16 +66,18 @@ providers ((node, vars) : xs) unseenVars allVars nodes =
 reqsOf :: Node -> Set Variable
 reqsOf (InitNode _) = Set.empty
 reqsOf (ConcNode c) = varsOfConf c
-reqsOf (TransNode (Transition _ before _)) = varsOfConf before
-reqsOf (DefNode _ e) = varsOfExpr e
-reqsOf (ConstrNode e) = varsOfExpr e
+reqsOf (PremNode (Loc _ prem)) = case prem of
+  PTransition (Transition _ before _) -> varsOfConf before
+  PDefinition _ e                     -> varsOfExpr e
+  PConstraint e                       -> varsOfExpr e
 
 givenBy :: Node -> Set Variable
 givenBy (InitNode c) = varsOfConf c
 givenBy (ConcNode _) = Set.empty
-givenBy (TransNode (Transition _ _ after)) = varsOfConf after
-givenBy (DefNode e _) = varsOfExpr e
-givenBy (ConstrNode _) = Set.empty
+givenBy (PremNode (Loc _ prem)) = case prem of
+  PTransition (Transition _ _ after)  -> varsOfConf after
+  PDefinition e _                     -> varsOfExpr e
+  PConstraint _                       -> Set.empty
 
 combineResults :: BindResult -> BindResult -> BindResult
 combineResults Nothing o = o

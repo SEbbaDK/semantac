@@ -71,8 +71,8 @@ checkRule Specification {sTerms, sCategories, sSystems} rule = do
 checkRuleHelper :: Loc Rule -> TCResult RuleError ()
 checkRuleHelper rule = do
     let Rule {base, premises} = unLoc rule
-    foldM_ (\() -> checkPremise . fakeLoc) () premises
-    context (CConclusion (fakeLoc base)) (checkTransition (fakeLoc base))
+    foldM_ (\() -> checkPremise) () premises
+    context (CConclusion base) (checkTransition base)
 
 checkPremise :: Loc Premise -> TCResult RuleError ()
 checkPremise (Loc l (PTransition trans)) =
@@ -219,7 +219,7 @@ lookupTerm pos name = do
     TCState { terms } <- get
     case find ((name ==) . dName . unLoc) terms of
         Just dec -> return $ dType (unLoc dec)
-        Nothing  -> returnError (UndefinedVar (Loc pos name))
+        Nothing  -> returnError (UndefinedTerm (Loc pos name))
 
 newTypeVar :: Monad m => TypeChecker m TypeVar
 newTypeVar = do

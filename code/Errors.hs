@@ -2,6 +2,7 @@
 module Errors where
 
 import           Ast
+import           Graph
 import           Data.List (intercalate)
 import           Loc       (Loc (Loc), Pos, pos, showPos, showPosInSource)
 import           Types     (Type (TVar), TypeVar)
@@ -32,7 +33,8 @@ data RuleError
   -- functions have to be explicitly declared upfront with their type
   -- signatures.
   | InifiniteType TypeVar (Loc Type)
-  | UndefinedVar (Loc String)
+  | UndefinedTerm (Loc String)
+  | UndefinedVar Node [Variable]
   | UndefinedArrow (Loc String)
   | UndefinedType (Loc String)
   | ConfTypeMismatch (Loc Type) (Loc Type) (Loc SystemDecl)
@@ -40,18 +42,18 @@ data RuleError
 type Lines = [String]
 
 showErrorMessage :: String -> Error SpecificationError -> String
-showErrorMessage src (Error (ctx, e)) = unlines (showTopErrorLines src e)
+showErrorMessage src (Error (ctx, e)) = unlines (showSpecError src e)
 
 showErrorInSource :: Error a -> String -> String
 showErrorInSource (Error (ctx, _)) src =
     let p = contextPos $ head ctx
     in showPosInSource p src
 
-showTopErrorLines :: String -> SpecificationError -> Lines
-showTopErrorLines src (CategoryError e)        = showCategoryError e
-showTopErrorLines src (SystemError e)          = showSystemError e
-showTopErrorLines src (RuleError ruleName e)   = showRuleError src e
-showTopErrorLines src (MultiRuleDefinitions e) = ["todo"]
+showSpecError :: String -> SpecificationError -> Lines
+showSpecError src (CategoryError e)        = showCategoryError e
+showSpecError src (SystemError e)          = showSystemError e
+showSpecError src (RuleError ruleName e)   = showRuleError src e
+showSpecError src (MultiRuleDefinitions e) = ["todo"]
 
 showCategoryError :: CategoryError -> Lines
 showCategoryError _ = ["todo"]
@@ -76,9 +78,14 @@ showRuleError src err = case err of
         , "  Type variable " ++ show (TVar tv) ++ " occurs in " ++ show t
         , showPosInSource p src
         ]
-    UndefinedVar (Loc p name) ->
+    UndefinedTerm (Loc p name) ->
         [ header $ "Use of undefined variable \"" ++ name ++ "\""
         , showPosInSource p src
+        ]
+    UndefinedVar node vars ->
+        [ header $ "Unbound variables in " ++ nodeExplanation node
+        , "The unbound variables are: [ " ++ (unwords $ map pprint vars) ++ " ]"
+        , showPosInSource (nodePos node) src
         ]
     UndefinedArrow (Loc p arrowName) ->
         [ header $ "Use of undefined arrow: " ++ arrowName
@@ -138,6 +145,11 @@ showStackTrace_ stack =
             name ++ concat (replicate padding " ") ++ "[" ++ showPos pos ++ "]\n"
     in
     fmap combine (zip names locs)
+
+nodeExplanation :: Node -> String
+nodeExplanation (InitNode _) = "the initial configuration of the rules conclusion"
+nodeExplanation (ConcNode _) = "the final configuration of the rules conclusion"
+nodeExplanation (PremNode _) = "a premise of the rule"
 
 contextName :: Context -> String
 contextName ctx = case ctx of

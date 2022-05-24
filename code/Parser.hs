@@ -38,6 +38,12 @@ ws =
     (L.skipLineComment "#")
     (L.skipBlockComment "#*" "*#")
 
+plusWs :: Parser a -> Parser a
+plusWs p = do
+  res <- p
+  ws
+  return res
+
 categoryNameParser :: Parser String
 categoryNameParser = do
   c <- try upperChar
@@ -232,10 +238,7 @@ eqDefParser = do
     Nothing -> PDefinition left right
 
 premiseParser :: Parser Premise
-premiseParser = do
-  p <- try (fmap PTransition transParser) <|> eqDefParser
-  ws
-  return p
+premiseParser = try (fmap PTransition transParser) <|> eqDefParser
 
 ruleParser :: Parser Rule
 ruleParser = do
@@ -245,10 +248,10 @@ ruleParser = do
   ws
   name <- categoryNameParser
   ws
-  premises <- many premiseParser
+  premises <- many $ plusWs $ locced $ premiseParser
   ws
   ruleSepParser
-  base <- transParser
+  base <- locced transParser
   return $ Rule {name, base, premises, properties}
   where
     ruleSepParser = string "---" >> many (char '-') >> ws

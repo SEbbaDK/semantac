@@ -1,11 +1,12 @@
 #!/usr/bin/env runhaskell
 {-# LANGUAGE NamedFieldPuns #-}
+
 module Main where
 import           Control.Monad         (forM_, when)
 import           Data.Map.Strict       (Map, foldlWithKey)
 import           Data.Semigroup        ((<>))
 import           Errors                (Error (Error), showErrorInSource,
-                                        showErrorMessage, showStackTrace)
+                                        showErrorMessage, showStackTrace, showSpecError)
 import           Options.Applicative
 import           Parser                (doParse)
 import           System.IO             (hPutStr, stderr)
@@ -51,7 +52,7 @@ cli Args {file, printast, printlatex = False, printpretty, printbinds} = do
       when printpretty (putStrLn $ pprint ast)
       putStrLn $ case bindCheck ast of
         Nothing -> "No bind errors"
-        Just e -> "Bind errors:\n" ++ unlines e
+        Just e -> (concat $ map ("Bind Error: " ++) $ map unlines $ map (showSpecError src) e)
       case typeCheck ast of
         Right allBinds  -> do
           putStrLn "Checks passed"
