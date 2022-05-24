@@ -55,20 +55,21 @@ data Transition
     }
   deriving (Show)
 
-data Variable
-  = Variable
-    { typeName :: String
-    , varName  :: String
-    , marks    :: Int
-    , binds    :: [(Variable, Variable)]
-    }
+data VariableExpr
+  = VRef Variable
+  | VBind VariableExpr Variable Expr
   deriving (Show)
 
-instance Eq Variable where
-    (==) (Variable t1 n1 m1 b1) (Variable t2 n2 m2 b2) =
-        t1 == t2 && n1 == n2 && m1 == m2
+data Variable
+  = Variable
+    { typeName :: Maybe String
+    , varName  :: String
+    , marks    :: Int
+    }
+  deriving (Show, Eq)
+
 instance Ord Variable where
-    compare (Variable t1 n1 m1 b1) (Variable t2 n2 m2 b2) = let
+    compare (Variable t1 n1 m1) (Variable t2 n2 m2) = let
         tc = compare t1 t2
         nc = compare n1 n2
         mc = compare m1 m2
@@ -84,24 +85,21 @@ instance Ord Variable where
 data Conf
   = Conf [Loc Conf]
   | Syntax String
-  | Var Variable
+  | Var VariableExpr
   | SyntaxList [Loc Conf]
   | Paren (Loc Conf)
   deriving (Show)
 
 data Premise
   = PTransition Transition
-  | PEquality Equality
+  | PConstraint Expr
   | PDefinition Expr Expr
   deriving (Show)
 
-data Equality
-  = Eq Expr Expr
-  | InEq Expr Expr
-  deriving (Show)
-
 data Expr
-  = EVar Variable
+  = EVar VariableExpr
   | ECall Expr [Expr]
+  | EEq Expr Expr
+  | EInEq Expr Expr
   deriving (Show)
 

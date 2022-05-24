@@ -64,14 +64,17 @@ instance Pretty Transition where
   pprint Transition { system, before, after } =
     pprint before ++ " " ++ system ++ " " ++ pprint after
 
+instance Pretty VariableExpr where
+  pprint (VRef v)        = pprint v
+  pprint (VBind v e1 e2) = pprint v ++ "[" ++ pprint e1 ++ "↦" ++ pprint e2 ++ "]"
+
 instance Pretty Variable where
-  pprint Variable { typeName, varName, marks, binds } = concat
-    [ typeName
-    , varnamer varName
-    , replicate marks '\''
-    , concatMap (\(var, val) -> "[" ++ pprint var ++ "↦" ++ pprint val ++ "]") binds
-    ]
-    where
+  pprint Variable { typeName, varName, marks } =
+    concat $ case typeName of
+      Nothing -> [ varName, markers ]
+      Just tp -> [ tp, varnamer varName, markers ]
+      where
+        markers = replicate marks '\''
         varnamer ""  = ""
         varnamer "0" = "₀"
         varnamer "1" = "₁"
@@ -94,11 +97,8 @@ instance Pretty Conf where
 
 instance Pretty Premise where
   pprint (PTransition trans) = pprint trans
-  pprint (PEquality eq)      = pprint eq
-
-instance Pretty Equality where
-  pprint (Eq l r)   = pprint l ++ " = " ++ pprint r
-  pprint (InEq l r) = pprint l ++ " ≠ " ++ pprint r
+  pprint (PConstraint ex)    = pprint ex
+  pprint (PDefinition vs ex) = unwords [ pprint vs, "≔", pprint ex ]
 
 instance Pretty Expr where
   pprint (EVar s)    = pprint s

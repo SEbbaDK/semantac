@@ -141,14 +141,14 @@ propertyParser =
       deterministic = value (string "non-deterministic") NonDeterministic
       terminating = value (string "non-terminating") NonTerminating
 
-bindingParser :: Parser (Variable, Variable)
+bindingParser :: Parser (Variable, Expr)
 bindingParser = do
   char '['
   var <- variableParser
   ws
   string "|->" <|> string "↦"
   ws
-  val <- variableParser
+  val <- exprParser
   ws
   char ']'
   return ( var, val )
@@ -158,8 +158,15 @@ variableParser = do
   base <- some alphaNumChar
   name <- option "" $ char '_' >> some alphaNumChar
   marks <- many (char '\'')
+  if name == ""
+      then return $ Variable Nothing     base (length marks)
+      else return $ Variable (Just base) name (length marks)
+
+variableExprParser :: Parser VariableExpr
+variableExprParser = do
+  var <- variableParser
   binds <- many bindingParser
-  return $ Variable base name (length marks) binds
+  return $ foldl (\ex -> \(from,to) -> VBind ex from to) (VRef var) binds
 
 confElementParser :: Parser (Loc Conf)
 confElementParser = do
@@ -176,7 +183,7 @@ confElementParser = do
     elemSyntaxParser = Syntax <$> betweenCharEscaped '"'
 
     elemVarParser :: Parser Conf
-    elemVarParser    = Var <$> variableParser
+    elemVarParser    = Var <$> variableExprParser
 
     elemParenParser :: Parser Conf
     elemParenParser  = Paren <$> betweenS "(" confElementParser ")"
@@ -203,23 +210,25 @@ exprParamParser = betweenS "(" (exprParser `sepBy` some (string "," >> ws)) ")"
 
 exprParser :: Parser Expr
 exprParser = do
-  lhs <- functionNameParser
-  params <- exprParamParser
+  v <- EVar <$> variableExprParser
+  params <- option Nothing $ try (Just <$> exprParamParser)
   ws
   -- TODO: Make this actually parse expressions properly
-  return $ ECall (EVar $ Variable "" lhs 0 []) params
+  case params of
+      Nothing -> return v
+      Just ps -> return $ ECall v ps
 
 eqDefParser :: Parser Premise
 eqDefParser = do
   left <- exprParser
   ws
-  eq <- try (value (string "==") $ Just Eq) <|> try (value (string "!=") (Just InEq)) <|>
+  eq <- try (value (string "==") $ Just EEq) <|> try (value (string "!=") (Just EInEq)) <|>
         try (value (string "=") $ Nothing) <|> value (string ":=") Nothing
   ws
   right <- exprParser
   ws
   return $ case eq of
-    Just e  -> PEquality $ e left right
+    Just e  -> PConstraint $ e left right
     Nothing -> PDefinition left right
 
 premiseParser :: Parser Premise
