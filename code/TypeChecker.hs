@@ -45,7 +45,7 @@ typeCheck spec =
         f :: SpecificationResult -> Loc Rule -> SpecificationResult
         f (Right allBinds) rule =
             bimap
-                (fmap (RuleError ruleName))
+                (fmap (RuleError rule))
                 (\binds -> insert ruleName binds allBinds)
                 (checkRule spec rule)
             where Rule { name = ruleName } = unLoc rule

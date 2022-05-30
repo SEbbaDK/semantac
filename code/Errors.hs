@@ -18,7 +18,7 @@ instance Functor Error where
 data SpecificationError
   = CategoryError CategoryError
   | SystemError SystemError
-  | RuleError String RuleError
+  | RuleError (Loc Rule) RuleError
   | MultiRuleDefinitions [Loc String]
 
 -- Todo: figure out what errors you can have here
@@ -42,6 +42,12 @@ data RuleError
   | ConfTypeMismatch (Loc Type) (Loc Type) (Loc SystemDecl)
 
 type Lines = [String]
+
+showError :: String -> Error SpecificationError -> String
+showError src e
+    = showErrorMessage src e ++
+      concatMap ("  in " ++) (showStackTrace e)
+
 
 showErrorMessage :: String -> Error SpecificationError -> String
 showErrorMessage src (Error (ctx, e)) = unlines (showSpecError src e)

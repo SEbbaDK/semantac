@@ -23,11 +23,15 @@ type BindRuleError = RuleError
 type BindRuleResult = Maybe [BindRuleError]
 type BindRuleResultOr a = Either [BindRuleError] a
 
-bindCheck :: Specification -> BindResult
+bindCheck :: Specification -> Maybe [Error BindError]
 bindCheck (Specification decs cats systems rules) = result
     where
-        ruleChecks = map bindCheckRule rules
-        result = concatMaybe ruleChecks
+        ruleChecks = concatMaybe $ map bindCheckRule rules
+        mapper :: SpecificationError -> Error SpecificationError
+        mapper e = case e of
+            RuleError r e -> Error ([CRule r], RuleError r e)
+            x -> Error ([], x)
+        result = fmap (map mapper) ruleChecks
 
 
 bindCheckRule :: Loc Rule -> BindResult
@@ -37,7 +41,7 @@ bindCheckRule r =
     nodes = start : end : prems
     backRes = backwardSearch nodes
     foreRes = forwardSearch nodes
-    errorify e = Just $ map (RuleError $ name $ unLoc r) e
+    errorify e = Just $ map (RuleError r) e
   in
     case (backRes, foreRes) of
       (Left be, Left fe) -> errorify $ be ++ fe

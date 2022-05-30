@@ -5,8 +5,7 @@ module Main where
 import           Control.Monad         (forM_, when)
 import           Data.Map.Strict       (Map, foldlWithKey)
 import           Data.Semigroup        ((<>))
-import           Errors                (Error (Error), showErrorInSource,
-                                        showErrorMessage, showStackTrace, showSpecError)
+import           Errors                (Error (Error), showError)
 import           Options.Applicative
 import           Parser                (doParse)
 import           System.IO             (hPutStr, stderr)
@@ -52,15 +51,13 @@ cli Args {file, printast, printlatex = False, printpretty, printbinds} = do
       when printpretty (putStrLn $ pprint ast)
       putStrLn $ case bindCheck ast of
         Nothing -> "No bind errors"
-        Just e -> (concat $ map ("Bind Error: " ++) $ map unlines $ map (showSpecError src) e)
+        Just e -> unlines $ map ("Bind Error: " ++) $ map (showError src) e
       case typeCheck ast of
         Right allBinds  -> do
           putStrLn "Checks passed"
           when printbinds (forM_ allBinds (putStrLn . showBinds))
         Left err -> do
-          putErr $ "Type Error: " ++ showErrorMessage src err
-          -- putErrLn $ showErrorInSource err src
-          putErr $ concatMap ("  in " ++) (showStackTrace err)
+          putErr $ "Type Error: " ++ showError src err
 cli Args {file, printast, printlatex = True} = do
   putStrLn "latex mode"
 
