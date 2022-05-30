@@ -104,6 +104,8 @@ instance Pretty Premise where
 instance Pretty Expr where
   pprint (EVar s)    = pprint s
   pprint (ECall o e) = pprint o ++ "(" ++ intercalate ", " (map pprint e) ++ ")"
+  pprint (EEq l r)   = pprint l ++ " = " ++ pprint r
+  pprint (EInEq l r) = pprint l ++ " ≠ " ++ pprint r
 
 instance Pretty Type where
   pprint (TAlias name)     = name

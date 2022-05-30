@@ -212,13 +212,12 @@ transParser = do
   return $ Transition {system, before, after}
 
 exprParamParser :: Parser [Expr]
-exprParamParser = betweenS "(" (exprParser `sepBy` some (string "," >> ws)) ")"
+exprParamParser = betweenS "(" (exprParser `sepBy` (ws >> string "," >> ws)) ")"
 
 exprParser :: Parser Expr
 exprParser = do
   v <- EVar <$> variableExprParser
   params <- option Nothing $ try (Just <$> exprParamParser)
-  ws
   -- TODO: Make this actually parse expressions properly
   case params of
       Nothing -> return v
@@ -232,7 +231,6 @@ eqDefParser = do
         try (value (string "=") $ Nothing) <|> value (string ":=") Nothing
   ws
   right <- exprParser
-  ws
   return $ case eq of
     Just e  -> PConstraint $ e left right
     Nothing -> PDefinition left right
