@@ -1,0 +1,21 @@
+#category Nat = "Z" U ("S" x Nat)
+category Nat = Syntax U (Syntax x Nat)
+
+system Nat -> Nat
+
+rule Ack-1
+"Z" = x
+---
+<"ack" x y> -> <"S" y>
+
+rule Ack-2
+("S" x') = x
+"Z" = y
+---
+<"ack" x y> -> <"ack" x' ("S" ("Z"))>
+
+rule Ack-3
+("S" x') = x
+("S" y') = y
+---
+<"ack" x y> -> <"ack" x' ("ack" x y')>
