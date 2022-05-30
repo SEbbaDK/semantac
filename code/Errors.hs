@@ -35,6 +35,8 @@ data RuleError
   | InifiniteType TypeVar (Loc Type)
   | UndefinedTerm (Loc String)
   | UndefinedVar Node [Variable]
+  | UnusedVar Node [Variable]
+  | UnreachablePremise Node
   | UndefinedArrow (Loc String)
   | UndefinedType (Loc String)
   | ConfTypeMismatch (Loc Type) (Loc Type) (Loc SystemDecl)
@@ -85,6 +87,16 @@ showRuleError src err = case err of
     UndefinedVar node vars ->
         [ header $ "Unbound variables in " ++ nodeExplanation node
         , "The unbound variables are: [ " ++ (unwords $ map pprint vars) ++ " ]"
+        , showPosInSource (nodePos node) src
+        ]
+    UnusedVar node vars ->
+        [ header $ "Unused variables in " ++ nodeExplanation node
+        , "The variables not being used are: [ " ++ (unwords $ map pprint vars) ++ " ]"
+        , showPosInSource (nodePos node) src
+        ]
+    UnreachablePremise node ->
+        [ header $ nodeExplanation node ++ " is not reachable via any variables."
+        , "None of the variables in the premise are used in rules required to reach the conclusion or reachable from the initial configuration."
         , showPosInSource (nodePos node) src
         ]
     UndefinedArrow (Loc p arrowName) ->

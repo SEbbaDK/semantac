@@ -27,7 +27,7 @@ bindCheck :: Specification -> BindResult
 bindCheck (Specification decs cats systems rules) = result
     where
         ruleChecks = map bindCheckRule rules
-        result = foldr combineResults Nothing ruleChecks
+        result = concatMaybe ruleChecks
 
 
 bindCheckRule :: Loc Rule -> BindResult
@@ -35,33 +35,46 @@ bindCheckRule r =
   let
     (start, prems, end) = graphify $ unLoc r
     nodes = start : end : prems
-    nodesAndVars = zip nodes $ map givenBy nodes
-    res = reqSearch nodesAndVars [] nodes
+    backRes = backwardSearch nodes
+    foreRes = forwardSearch nodes
+    errorify e = Just $ map (RuleError $ name $ unLoc r) e
   in
-    case res of
-        Left errors -> Just $ map (RuleError $ name $ unLoc r) errors
-        Right reqset -> Nothing -- TODO
+    case (backRes, foreRes) of
+      (Left be, Left fe) -> errorify $ be ++ fe
+      (Left be, _)       -> errorify be
+      (_      , Left fe) -> errorify fe
+      (Right b, Right f) -> if null untouched
+        then Nothing
+        else errorify $ map UnreachablePremise untouched
+          where untouched = filter (\x -> notElem x b) $ filter (\x -> notElem x f) $ nodes
 
-reqSearch :: [(Node, Set Variable)] -> [Node] -> [Node] -> BindRuleResultOr [Node]
-reqSearch nv seen [] = Right $ unique seen
-reqSearch nv seen (n:xs) = let
-    reqs = reqsOf n
-    pros = providers nv reqs reqs []
+backwardSearch nodes = search UndefinedVar reqsOf (zip nodes $ map givenBy nodes) [] nodes
+forwardSearch nodes = search UnusedVar givenBy (zip nodes $ map reqsOf nodes) [] nodes
+
+-- Searches either towards base or conclusion
+search :: (Node -> [Variable] -> RuleError) -> (Node -> Set Variable) -> [(Node, Set Variable)] -> [Node] -> [Node] -> BindRuleResultOr [Node]
+search err varFunc nv seen [] = Right $ unique seen
+search err varFunc nv seen (n:xs) = let
+    reqs = varFunc n
+    pros = sources nv reqs reqs []
   in
     case pros of
         Left vars -> Left $
-            [ UndefinedVar n $ Set.toList vars ]
-        Right nodes -> reqSearch nv (nodes ++ seen) xs
+            [ err n $ Set.toList vars ]
+        Right nodes -> search err varFunc nv (nodes ++ seen) xs
 
-providers :: [(Node, Set Variable)] -> Set Variable -> Set Variable -> [Node] -> Either (Set Variable) [Node]
-providers [] unseenVars _ nodes =
+-- Finds all variables that supplies parts of the set
+-- Throws right if enough sources are found
+-- Throws left if not all sources are found
+sources :: [(Node, Set Variable)] -> Set Variable -> Set Variable -> [Node] -> Either (Set Variable) [Node]
+sources [] unseenVars _ nodes =
     if Set.null unseenVars
         then Right nodes
         else Left unseenVars
-providers ((node, vars) : xs) unseenVars allVars nodes =
+sources ((node, vars) : xs) unseenVars allVars nodes =
     if Set.null (vars `intersection` allVars)
-        then providers xs unseenVars allVars nodes
-        else providers xs (unseenVars `difference` vars) allVars (node : nodes)
+        then sources xs unseenVars allVars nodes
+        else sources xs (unseenVars `difference` vars) allVars (node : nodes)
 
 reqsOf :: Node -> Set Variable
 reqsOf (InitNode _) = Set.empty
@@ -79,10 +92,13 @@ givenBy (PremNode (Loc _ prem)) = case prem of
   PDefinition e _                     -> varsOfExpr e
   PConstraint _                       -> Set.empty
 
-combineResults :: BindResult -> BindResult -> BindResult
-combineResults Nothing o = o
-combineResults o Nothing = o
-combineResults (Just e1) (Just e2) = Just $ e1 ++ e2
+concatMaybe :: [Maybe [a]] -> Maybe [a]
+concatMaybe = foldr combineMaybe Nothing
+
+combineMaybe :: Maybe [a] -> Maybe [a] -> Maybe [a]
+combineMaybe Nothing o = o
+combineMaybe o Nothing = o
+combineMaybe (Just e1) (Just e2) = Just $ e1 ++ e2
 
 varsOfVarExpr :: VariableExpr -> Set Variable
 varsOfVarExpr (VBind v l r) = Set.insert l $ varsOfVarExpr v `union` varsOfExpr r
