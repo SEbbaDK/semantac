@@ -18,10 +18,10 @@ data Type
   deriving (Eq, Ord, Show)
 
 tSyntax :: Type
-tSyntax = TPrimitive "\"syntax\""
+tSyntax = TPrimitive "Syntax"
 
 tBool :: Type
-tBool = TPrimitive "\"bool\""
+tBool = TPrimitive "Bool"
 
 newtype TypeVar
   = TypeVar Int
