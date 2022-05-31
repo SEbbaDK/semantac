@@ -1,0 +1,7 @@
+system (Syntax x Syntax) => Syntax
+
+rule Unused
+<a, a> => <c>
+----------
+<a, x> => <c>
+

@@ -1,0 +1,7 @@
+system Syntax => Syntax
+
+rule Unreachable
+<b> => <b>
+----------
+<a> => <a>
+
