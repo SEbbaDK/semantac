@@ -90,8 +90,10 @@ betweenCharEscaped delimiter = do
 
 baseTypeParser :: Parser Type
 baseTypeParser =
-  between (string "(" >> ws) (ws >> ")") typeParser
-    <|> fmap TPrimitive (betweenCharEscaped '"')
+  try (between (string "(" >> ws) (ws >> ")") typeParser)
+    <|> try (fmap TPrimitive (betweenCharEscaped '"'))
+    <|> try (value (string "Syntax") tSyntax)
+    <|> try (value (string "Bool") tBool)
     <|> fmap TAlias categoryNameParser
 
 wtry :: Parser a -> Parser a
@@ -108,7 +110,7 @@ typeParser = let
   o <- wtry unionParse <|> wtry crossParse <|> wtry funcParse <|> return Nothing
   case o of
     Nothing -> return l
-    Just f  -> fmap (f l) typeParser
+    Just f  -> fmap (f l) (ws >> typeParser)
 
 functionNameParser :: Parser String
 functionNameParser = many alphaNumChar
