@@ -39,8 +39,8 @@ bindCheckRule r =
   let
     (start, prems, end) = graphify $ unLoc r
     nodes = start : end : prems
-    backRes = backwardSearch nodes
-    foreRes = forwardSearch nodes
+    backRes = backwardSearch nodes end
+    foreRes = forwardSearch nodes start
     errorify e = Just $ map (RuleError r) e
   in
     case (backRes, foreRes) of
@@ -50,13 +50,20 @@ bindCheckRule r =
       (Right b, Right f) -> if null untouched
         then Nothing
         else errorify $ map UnreachablePremise untouched
-          where untouched = filter (\x -> notElem x b) $ filter (\x -> notElem x f) $ nodes
+          where untouched = filter (\x -> notElem x b && notElem x f) nodes
 
-backwardSearch nodes = search UndefinedVar reqsOf (zip nodes $ map givenBy nodes) [] nodes
-forwardSearch nodes = search UnusedVar givenBy (zip nodes $ map reqsOf nodes) [] nodes
+backwardSearch nodes end =
+    search UndefinedVar reqsOf (zip nodes $ map givenBy nodes) [] [end]
+forwardSearch nodes start =
+    search UnusedVar givenBy (zip nodes $ map reqsOf nodes) [] [start]
 
 -- Searches either towards base or conclusion
-search :: (Node -> [Variable] -> RuleError) -> (Node -> Set Variable) -> [(Node, Set Variable)] -> [Node] -> [Node] -> BindRuleResultOr [Node]
+search :: (Node -> [Variable] -> RuleError)
+       -> (Node -> Set Variable)
+       -> [(Node, Set Variable)]
+       -> [Node]
+       -> [Node]
+       -> BindRuleResultOr [Node]
 search err varFunc nv seen [] = Right $ unique seen
 search err varFunc nv seen (n:xs) = let
     reqs = varFunc n
@@ -65,7 +72,8 @@ search err varFunc nv seen (n:xs) = let
     case pros of
         Left vars -> Left $
             [ err n $ Set.toList vars ]
-        Right nodes -> search err varFunc nv (nodes ++ seen) xs
+        Right nodes -> search err varFunc nv (n : seen) (xs ++ unseen)
+            where unseen = filter (\n -> n `notElem` seen) nodes
 
 -- Finds all variables that supplies parts of the set
 -- Throws right if enough sources are found
