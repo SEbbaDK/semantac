@@ -76,14 +76,14 @@ showRuleError src err = case err of
         , showPosInSource p1 src
         , header $ "  and: " ++ showPos p2
         , showPosInSource p2 src
-        , bold $ "  Expected: " ++ highlight (show t2)
-        , bold $ "  Received: " ++ highlight (show t1)
+        , bold $ "  Expected: " ++ highlight (pprint t2)
+        , bold $ "  Received: " ++ highlight (pprint t1)
         ]
     InifiniteType tv (Loc p t) ->
         -- This message is kinda impossible to understand I think.
         -- Failure of the "occurs check" is the terminology in the literature for this type of error.
         [ header $ "Infinite type. "
-        , "  Type variable " ++ show (TVar tv) ++ " occurs in " ++ show t
+        , "  Type variable " ++ pprint (TVar tv) ++ " occurs in " ++ pprint t
         , showPosInSource p src
         ]
     UndefinedTerm (Loc p name) ->
@@ -118,9 +118,9 @@ showRuleError src err = case err of
         , ""
         , "The type of the configuration at " ++ showPos usedPos ++ " does not match the type given in the definition of the transition system: " ++ arrow sys
         , ""
-        , bold $ "  The type of the configuration: " ++ highlight (show usedType)
+        , bold $ "  The type of the configuration: " ++ highlight (pprint usedType)
         , showPosInSource usedPos src
-        , bold $ "  The system specifies that it should be: " ++ highlight (show defType)
+        , bold $ "  The system specifies that it should be: " ++ highlight (pprint defType)
         , showPosInSource defPos src
         , bold $ "These two types should match, but they do not."
         ]

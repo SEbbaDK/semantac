@@ -1,0 +1,7 @@
+system Syntax => Syntax
+
+rule Unbound
+<a> => <a>
+----------
+<a> => <c>
+
