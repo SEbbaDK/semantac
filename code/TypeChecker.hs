@@ -137,14 +137,22 @@ inferVar :: Variable -> TCResult RuleError Type
 inferVar Variable { typeName = Just tName } = do
     TCState { categories } <- get
     case find ((== tName) . cName . unLoc) categories of
-        Nothing -> returnError $ UndefinedType (fakeLoc tName)
+        Nothing        -> returnError $ UndefinedType (fakeLoc tName)
         Just (Loc _ c) -> return $ cType c
 inferVar x =
     TVar <$> typeVarOf x
 
 
 inferExpr :: Pos -> Expr -> TCResult RuleError Type
-inferExpr pos (EVar v)       = inferVarEx v
+inferExpr pos (EVar v) = inferVarEx v
+inferExpr pos (EEq l r) = do
+    lt <- inferExpr pos l
+    rt <- inferExpr pos r
+    unify pos pos lt rt
+inferExpr pos (EInEq l r) = do
+    lt <- inferExpr pos l
+    rt <- inferExpr pos r
+    unify pos pos lt rt
 inferExpr pos (ECall f args) = do
     tf <- inferExpr pos f
     ta <- TCross <$> mapM (inferExpr pos) args
