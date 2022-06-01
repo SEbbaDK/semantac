@@ -35,21 +35,20 @@ type TCResult e a = TypeChecker (Either (Error e)) a
 
 -- Type Checking
 
-type CheckResult = Map String (Map Variable Type)
-type SpecificationResult = Either (Error SpecificationError) CheckResult
+type CheckResult = (Rule, Map Variable Type)
+type SpecificationResult = ([Error SpecificationError], [CheckResult])
 
-typeCheck :: Specification -> SpecificationResult
+typeCheck :: Specification -> Either [Error SpecificationError] [CheckResult]
 typeCheck spec =
-    foldl f (Right mempty) (sRules spec)
+    case foldl f ([], []) (sRules spec) of
+        ([], oks) -> Right oks
+        (errs, _) -> Left errs
     where
         f :: SpecificationResult -> Loc Rule -> SpecificationResult
-        f (Right allBinds) rule =
-            bimap
-                (fmap (RuleError rule))
-                (\binds -> insert ruleName binds allBinds)
-                (checkRule spec rule)
-            where Rule { name = ruleName } = unLoc rule
-        f (Left e) rule = Left e
+        f (errors, oks) rule =
+            case checkRule spec rule of
+                Left err -> (fmap (RuleError rule) err : errors, oks)
+                Right ok -> (errors, (unLoc rule, ok) : oks)
 
 checkRule ::
     Specification
