@@ -5,14 +5,16 @@ module Main where
 import           Control.Monad         (forM_, when)
 import           Data.Map.Strict       (Map, foldlWithKey)
 import           Data.Semigroup        ((<>))
-import           Errors                (Error (Error), showError)
+import           Data.List             (intercalate)
+import           Errors                (Error (Error), showError, bold)
 import           Options.Applicative
 import           Parser                (doParse)
 import           System.IO             (hPutStr, stderr)
+import qualified System.Exit as Exit
 import           Text.Megaparsec.Error (errorBundlePretty)
-import           TypeChecker           (typeCheck)
+import           TypeChecker           (typeCheck, CheckResult)
 import           Types
-import           Ast                   (Variable)
+import           Ast                   (Variable, name)
 import           Binding               (bindCheck)
 import           Pretty
 
@@ -37,30 +39,61 @@ parser =
   <*> switch (long "print-latex"  <> short 'l' <> help "Print latex output")
   <*> switch (long "print-types"  <> short 't' <> help "Print binding types")
 
-main :: IO ()
+main :: IO Int
 main = cli =<< execParser (info (parser <**> helper) (fullDesc <> progDesc "test" <> header "test2"))
 
-cli :: Args -> IO ()
+-- Error codes:
+-- 0 - Everything is fine
+-- 1 - Parsing failed
+-- 2 - Bind Errors
+-- 3 - Type Errors
+-- 9 - Both Bind and Type Errors
+cli :: Args -> IO Int
+cli Args {file, printast, printlatex = True} = do
+  putStrLn "latex mode"
+  exit 0
 cli Args {file, printast, printlatex = False, printpretty, printbinds} = do
   src <- readFile file
   case doParse file src of
-    Left err ->
+    Left err -> do
       putErr $ "Parsing Error: " ++ errorBundlePretty err
+      exit 1
     Right ast -> do
       when printast (putStrLn $ show ast)
       when printpretty (putStrLn $ pprint ast)
-      putStrLn $ case bindCheck ast of
-        Nothing -> "No bind errors"
-        Just e -> unlines $ map ("Bind Error: " ++) $ map (showError src) e
-      case typeCheck ast of
-        Right allBinds  -> do
-          putStrLn "Checks passed"
-          when printbinds (forM_ allBinds (putStrLn . showBinds))
-        Left err -> do
-          putErr $ "Type Error: " ++ showError src err
-cli Args {file, printast, printlatex = True} = do
-  putStrLn "latex mode"
 
-showBinds :: Map Variable Type -> String
-showBinds = foldlWithKey (\a x type_ -> a ++ "\n" ++ show x ++ " :: " ++ show type_) []
+      hadBindErrors <- case bindCheck ast of
+        Nothing -> return False
+        Just e -> do
+            putStr $ showErrors "Bind Error" src e
+            return True
+
+      case typeCheck ast of
+        Left err -> do
+          putErr $ "\n\n" ++ showErrors "Type Error" src err
+          exit $ if hadBindErrors then 9 else 3
+        Right checkResults  -> do
+          putStrLn "Checks passed"
+          when printbinds (putStr $ unlines $ map printCheckResult checkResults)
+          exit $ if hadBindErrors then 2 else 0
+
+exit 0 = Exit.exitWith $ Exit.ExitSuccess
+exit n = Exit.exitWith $ Exit.ExitFailure n
+
+showErrors errType src errs =
+    let
+        errList = map (showError src) errs
+        errlistHeaders = map ((bold errType ++ ": ") ++) errList
+    in
+        intercalate "\n\n" errlistHeaders
+    
+
+printCheckResult :: CheckResult -> String
+printCheckResult (rule, bind) = unlines
+    [ "Binds for rule " ++ name rule
+    , printBinds bind
+    ]
+
+printBinds :: Map Variable Type -> String
+printBinds = foldlWithKey (\a x type_ -> a ++ "\n" ++ show x ++ " :: " ++ show type_) []
 

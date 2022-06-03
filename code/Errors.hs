@@ -82,7 +82,7 @@ showRuleError src err = case err of
     InifiniteType tv (Loc p t) ->
         -- This message is kinda impossible to understand I think.
         -- Failure of the "occurs check" is the terminology in the literature for this type of error.
-        [ header $ "Infinite type. "
+        [ header $ "Infinite type"
         , "  Type variable " ++ pprint (TVar tv) ++ " occurs in " ++ pprint t
         , showPosInSource p src
         ]
@@ -115,7 +115,6 @@ showRuleError src err = case err of
         ]
     ConfTypeMismatch (Loc usedPos usedType) (Loc defPos defType) (Loc confpos sys) ->
         [ header $ "Mismatch between configuration and defined transition system."
-        , ""
         , "The type of the configuration at " ++ showPos usedPos ++ " does not match the type given in the definition of the transition system: " ++ arrow sys
         , ""
         , bold $ "  The type of the configuration: " ++ highlight (pprint usedType)
