@@ -92,11 +92,11 @@ checkTransitionHelper :: Loc SystemDecl -> Transition -> TCResult RuleError ()
 checkTransitionHelper sys Transition { before, after } = do
     let Loc l SystemDecl { initial, final } = sys
     context (CConf before) $ do
-        tl <- infer before
+        tl <- inferConf before
         let tr = unLoc initial
         mapError (mismatch sys initial) $ unify (pos before) (pos initial) tl tr
     context (CConf after) $ do
-        tl <- infer after
+        tl <- inferConf after
         let tr = unLoc final
         mapError (mismatch sys final) $ unify (pos after) (pos final) tl tr
     return ()
@@ -115,12 +115,16 @@ checkEquality lp rp l r = do
 
 -- Inference
 
-infer :: Loc Conf -> TCResult RuleError Type
-infer (Loc _ (Conf xs))       = TCross <$> mapM infer xs
-infer (Loc _ (Paren e))       = infer e
-infer (Loc _ (Syntax _))      = return tSyntax
-infer (Loc _ (Var v))         = inferVarEx v
-infer (Loc _ (SyntaxList xs)) = return tSyntax
+inferConf :: Loc Conf -> TCResult RuleError Type
+inferConf (Loc _ (Conf xs)) = TCross <$> mapM inferConfElement xs
+    where inferConfElement [e] = inferSyntax e
+          inferConfElement lis = return tSyntax
+
+inferSyntax :: Loc SyntaxElem -> TCResult RuleError Type
+inferSyntax (Loc p syntax) = case syntax of
+    SubElem e     -> TCross <$> mapM inferSyntax e
+    Syntax _      -> return tSyntax
+    Var v         -> inferVarEx v
 
 inferVarEx :: VariableExpr -> TCResult RuleError Type
 inferVarEx (VRef v) = inferVar v

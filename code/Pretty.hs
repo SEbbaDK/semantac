@@ -89,12 +89,15 @@ instance Pretty Variable where
         varnamer "9" = "₉"
         varnamer nam = "_" ++ nam
 
+pprintWithSpaces list = intercalate " " (map pprint list)
+
 instance Pretty Conf where
-  pprint (Conf s)        = "⟨" ++ intercalate ", " (map pprint s) ++ "⟩"
-  pprint (Paren e)       = "(" ++ pprint e ++ ")"
-  pprint (SyntaxList xs) = unwords $ fmap pprint xs
-  pprint (Syntax s)      = "\"" ++ s ++ "\""
-  pprint (Var v)         = pprint v
+  pprint (Conf s)        = "⟨" ++ intercalate ", " (map pprintWithSpaces s) ++ "⟩"
+
+instance Pretty SyntaxElem where
+  pprint (Syntax s)  = "\"" ++ s ++ "\""
+  pprint (Var v)     = pprint v
+  pprint (SubElem e) = "(" ++ pprintWithSpaces e ++ ")"
 
 instance Pretty Premise where
   pprint (PTransition trans) = pprint trans

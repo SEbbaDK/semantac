@@ -82,24 +82,28 @@ instance Ord Variable where
     (<=) v1 v2 =
         GT /= compare v1 v2
 
-data Conf
-  = Conf [Loc Conf]
-  | Syntax String
+data Expr
+  = EVar VariableExpr
+  | ECall Expr [Expr]
+  | EEq Expr Expr
+  | EInEq Expr Expr
+  deriving (Show, Eq, Ord)
+
+-- SYNTAX
+
+data Conf = Conf [SyntaxList]
+  deriving (Show, Eq, Ord)
+
+type SyntaxList = [Loc SyntaxElem]
+data SyntaxElem
+  = Syntax String
   | Var VariableExpr
-  | SyntaxList [Loc Conf]
-  | Paren (Loc Conf)
+  | SubElem SyntaxList
   deriving (Show, Eq, Ord)
 
 data Premise
   = PTransition Transition
   | PConstraint Expr
   | PDefinition Expr Expr
-  deriving (Show, Eq, Ord)
-
-data Expr
-  = EVar VariableExpr
-  | ECall Expr [Expr]
-  | EEq Expr Expr
-  | EInEq Expr Expr
   deriving (Show, Eq, Ord)
 

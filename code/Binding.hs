@@ -123,10 +123,11 @@ varsOfExpr (EEq   l r) = varsOfExpr l `union` varsOfExpr r
 varsOfExpr (EInEq l r) = varsOfExpr l `union` varsOfExpr r
 
 varsOfConf :: Loc Conf -> Set Variable
-varsOfConf (Loc _ c) = case c of
-    Conf cs       -> unions $ map varsOfConf cs
-    Syntax _      -> Set.empty
-    Var v         -> varsOfVarExpr v
-    SyntaxList cs -> unions $ map varsOfConf cs
-    Paren c       -> varsOfConf c
+varsOfConf (Loc _ (Conf cs)) = unions $ map unions $ map (map varsOfSyntaxElems) cs
+
+varsOfSyntaxElems :: Loc SyntaxElem -> Set Variable
+varsOfSyntaxElems (Loc _ e) = case e of
+    Syntax _  -> Set.empty
+    Var v     -> varsOfVarExpr v
+    SubElem c -> unions $ map varsOfSyntaxElems c
 

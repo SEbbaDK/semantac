@@ -176,31 +176,26 @@ variableExprParser = do
   binds <- many bindingParser
   return $ foldl (\ex -> \(from,to) -> VBind ex from to) (VRef var) binds
 
-confElementParser :: Parser (Loc Conf)
-confElementParser = do
-  start <- getPos
-  let parsers = try elemSyntaxParser <|> try elemVarParser <|> elemParenParser
-  elems <- locced parsers `sepBy` ws
-  end <- getPos
-  return $ case elems of
-    [e] -> e
-    l   -> Loc (start,end) $ SyntaxList l
-
+syntaxElementParser :: Parser [Loc SyntaxElem]
+syntaxElementParser = do
+  let syntaxParsers = try elemSyntaxParser <|> try elemVarParser <|> elemParenParser
+  elems <- locced syntaxParsers `sepBy` ws
+  return elems
   where
-    elemSyntaxParser :: Parser Conf
+    elemSyntaxParser :: Parser SyntaxElem
     elemSyntaxParser = Syntax <$> betweenCharEscaped '"'
 
-    elemVarParser :: Parser Conf
+    elemVarParser :: Parser SyntaxElem
     elemVarParser    = Var <$> variableExprParser
 
-    elemParenParser :: Parser Conf
-    elemParenParser  = Paren <$> betweenS "(" confElementParser ")"
+    elemParenParser :: Parser SyntaxElem
+    elemParenParser  = SubElem <$> betweenS "(" syntaxElementParser ")"
 
 confParser :: Parser Conf
 confParser =
   betweenS
     "<"
-    (fmap Conf (confElementParser `sepBy` comma))
+    (fmap Conf (syntaxElementParser `sepBy` comma))
     ">"
     where comma = ws >> string "," >> ws
 
