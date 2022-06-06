@@ -112,6 +112,8 @@ combineMaybe Nothing o = o
 combineMaybe o Nothing = o
 combineMaybe (Just e1) (Just e2) = Just $ e1 ++ e2
 
+-- TODO: This is probably incorrect. The bindings should not count as definitions
+--       but as uses when it comes to requirements etc.
 varsOfVarExpr :: VariableExpr -> Set Variable
 varsOfVarExpr (VBind v l r) = Set.insert l $ varsOfVarExpr v `union` varsOfExpr r
 varsOfVarExpr (VRef v) = Set.singleton v

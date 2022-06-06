@@ -68,6 +68,10 @@ data Variable
     }
   deriving (Show, Eq)
 
+rootVariable :: VariableExpr -> Variable
+rootVariable (VRef v) = v
+rootVariable (VBind v _ _) = rootVariable v
+
 instance Ord Variable where
     compare (Variable t1 n1 m1) (Variable t2 n2 m2) = let
         tc = compare t1 t2

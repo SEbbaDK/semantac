@@ -35,7 +35,8 @@ type TCResult e a = TypeChecker (Either (Error e)) a
 
 -- Type Checking
 
-type CheckResult = (Rule, Map Variable Type)
+type TypeMap = Map Variable Type
+type CheckResult = (Rule, TypeMap)
 type SpecificationResult = ([Error SpecificationError], [CheckResult])
 
 typeCheck :: Specification -> Either [Error SpecificationError] [CheckResult]
