@@ -39,6 +39,16 @@ type TypeMap = Map Variable Type
 type CheckResult = (Rule, TypeMap)
 type SpecificationResult = ([Error SpecificationError], [CheckResult])
 
+constructCheckerState specification context =
+    TCState
+        { nextTypeVar_ = 1
+        , bindings = mempty
+        , subs = mempty
+        , terms = sTerms specification
+        , categories = sCategories specification
+        , systems = sSystems specification
+        , contextStack = context }
+
 typeCheck :: Specification -> Either [Error SpecificationError] [CheckResult]
 typeCheck spec =
     case foldl f ([], []) (sRules spec) of
@@ -55,18 +65,10 @@ checkRule ::
     Specification
     -> Loc Rule
     -> Either (Error RuleError) (Map Variable Type)
-checkRule Specification {sTerms, sCategories, sSystems} rule = do
-    let state = TCState
-            { nextTypeVar_ = 1
-            , bindings = mempty
-            , subs = mempty
-            , terms = sTerms
-            , categories = sCategories
-            , systems = sSystems
-            , contextStack = [CRule rule] }
+checkRule spec rule = do
+    let state = constructCheckerState spec [CRule rule]
     TCState {bindings, subs} <- execStateT (checkRuleHelper rule) state
     return $ fmap (subst subs . TVar) bindings
-
 
 checkRuleHelper :: Loc Rule -> TCResult RuleError ()
 checkRuleHelper rule = do
@@ -140,12 +142,14 @@ inferVarEx (VBind v l r) = do
 inferVar :: Variable -> TCResult RuleError Type
 inferVar Variable { typeName = Just tName } = do
     TCState { categories } <- get
-    case find ((== tName) . cName . unLoc) categories of
+    case lookupTypeDirect tName categories of
         Nothing        -> returnError $ UndefinedType (fakeLoc tName)
         Just (Loc _ c) -> return $ cType c
 inferVar x =
     TVar <$> typeVarOf x
 
+lookupTypeDirect :: String -> [Loc CategoryDecl] -> Maybe (Loc CategoryDecl)
+lookupTypeDirect name cats = find ((== name) . cName . unLoc) cats
 
 inferExpr :: Pos -> Expr -> TCResult RuleError Type
 inferExpr pos (EVar v) = inferVarEx v
@@ -276,7 +280,7 @@ returnError err = do
 lookupType :: Pos -> String -> TCResult RuleError Type
 lookupType p name = do
     TCState { categories } <- get
-    case find ((name ==) . cName . unLoc) categories of
+    case lookupTypeDirect name categories of
         Just c  -> return $ cType $ unLoc c
         Nothing -> returnError $ UndefinedType (Loc p name)
 

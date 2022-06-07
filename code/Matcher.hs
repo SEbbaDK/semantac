@@ -1,48 +1,71 @@
+{-# LANGUAGE NamedFieldPuns #-}
+
 module Matcher where
 
 import Ast
 import Loc
 import Types
 import TypeChecker
+import Pretty -- TEMP
 
 import Control.Monad       (zipWithM)
-import Control.Monad.State (State, evalState, get)
+import Control.Monad.State (State, evalState, get, evalStateT)
 import qualified Data.Map as Map
 
-type StateTypeMaps a = State (TypeMap, TypeMap) a
+type TypeMatcher = VariableExpr -> Type -> Bool
+type MatcherState a = State (Specification, TypeMatcher) a
+
+getSpec :: MatcherState Specification
+getSpec = fmap fst get
+getTypeMatcher :: MatcherState TypeMatcher
+getTypeMatcher = fmap snd get
 
 equalLength a b = length a == length b
 
-confMatch :: TypeMap -> TypeMap -> Loc Conf -> Loc Conf -> Bool
-confMatch ltm rtm (Loc _ (Conf a)) (Loc _ (Conf b)) =
-    evalState (confListMatch a b) (ltm, rtm)
+-- Is sub a sub-type/compatible type of base
+compatibleType :: Specification -> Type -> Type -> Bool
+compatibleType spec base sub =
+    case evalStateT unifyer initState of
+        Right _ -> True
+        Left _ -> False
+        where
+            unifyer = unify fakePos fakePos base sub
+            initState = constructCheckerState spec []
 
-confListMatch :: [SyntaxList] -> [SyntaxList] -> StateTypeMaps Bool
+confMatch :: Specification -> (TypeMap, Loc Conf) -> Conf -> Bool
+confMatch spec (typemap, Loc _ (Conf a)) (Conf b) =
+    evalState (confListMatch a b) (spec, varMatch)
+        where
+            varMatch :: TypeMatcher
+            varMatch x y = case Map.lookup (rootVariable x) typemap of
+                Just tx -> compatibleType spec tx y
+                _       -> error "Don't give the matcher a typemap without all variables"
+
+confListMatch :: [SyntaxList] -> [SyntaxList] -> MatcherState Bool
 confListMatch a b = do
     matches <- fmap and $ zipWithM syntaxListMatch a b
     return $ equalLength a b && matches
 
-syntaxListMatch :: SyntaxList -> SyntaxList -> StateTypeMaps Bool
+syntaxListMatch :: SyntaxList -> SyntaxList -> MatcherState Bool
 syntaxListMatch a b = do
     matches <- fmap and $ zipWithM syntaxMatch a b
     return $ equalLength a b && matches
 
-syntaxMatch :: Loc SyntaxElem -> Loc SyntaxElem -> StateTypeMaps Bool
-syntaxMatch (Loc _ a) (Loc _ b) = case (a,b) of
+syntaxMatch :: Loc SyntaxElem -> Loc SyntaxElem -> MatcherState Bool
+syntaxMatch (Loc p1 t1) (Loc p2 t2) = case (t1,t2) of
     (Syntax s1 , Syntax s2 ) -> return $ s1 == s2
     (SubElem s1, SubElem s2) -> syntaxListMatch s1 s2
-    (Var v1    , Var v2    ) -> variableCompare v1 v2
+    (Var v1    , Var v2    ) -> variableCompare v1 (Loc p2 v2)
+    (Var v1    , SubElem _ ) -> do tm <- getTypeMatcher; return $ tm v1 tSyntax
     _                        -> return $ False
 
-variableCompare :: VariableExpr -> VariableExpr -> StateTypeMaps Bool
+variableCompare :: VariableExpr -> Loc VariableExpr -> MatcherState Bool
 variableCompare v1 v2 = do
-    (ltm, rtm) <- get
-    let t1 = Map.lookup (rootVariable v1) ltm
-    let t2 = Map.lookup (rootVariable v2) rtm
-    case (t1, t2) of
-        (Just type1, Just type2) -> return $ equivalentTypes type1 type2
-        _                        -> error "Lookup into map failed. hmmm"
-
-equivalentTypes :: Type -> Type -> Bool
-equivalentTypes t1 t2 = error "unimplemented"
+    (spec, typeMatcher) <- get
+    let v1TypeName = typeName $ rootVariable $ unLoc v2
+    case v1TypeName of
+        Nothing -> error $ "Give type of " ++ pprint v2 ++ " variable"
+        Just name -> case lookupTypeDirect name (sCategories spec) of
+            Nothing -> error $ "No type called " ++ name
+            Just (Loc _ cat) -> return $ typeMatcher v1 (cType cat)
 
