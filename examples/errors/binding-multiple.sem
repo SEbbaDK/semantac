@@ -1,0 +1,8 @@
+system Syntax => Syntax
+
+rule MultiBind
+<a> => <c>
+<b> => <c>
+----------------
+<a "&" b> => <c>
+

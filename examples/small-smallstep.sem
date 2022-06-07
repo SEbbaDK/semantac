@@ -1,0 +1,48 @@
+category Exp = Syntax
+category Int = "Any Integer"
+
+system Exp ->e (Exp ∪ Int)
+system Exp ->b (Exp ∪ Bool)
+
+meta add = (Int × Int) -> Int
+
+rule Add1
+    <e1> =>e <i>
+    e := add(e1', e2')
+-----------------------------
+<e1 "+" e2> =>e <e>
+rule Add2
+    <e1> =>e <e1'>
+    <e2> =>e <e2'>
+    e := add(e1', e2')
+-----------------------------
+<e1 "+" e2> =>e <e>
+rule Add3
+    <e1> =>e <e1'>
+    <e2> =>e <e2'>
+    e := add(e1', e2')
+-----------------------------
+<e1 "+" e2> =>e <e>
+
+
+rule AddOne
+	<e> =>e <e''>
+	e' := add(e'', "1")
+-----------------
+<e "++"> =>e <e'>
+
+
+rule IfTrue
+    <e1> =>b <b>
+    b == [true]
+    <e2> =>e <e>
+-------------------------------------
+<"if" e1 "then" e2 "else" e3> =>e <e>
+
+rule IfFalse
+    <e1> =>b <b>
+    b == "false"
+    <e3> =>e <e>
+-------------------------------------
+<"if" e1 "then" e2 "else" e3> =>e <e>
+
