@@ -64,14 +64,16 @@ cli Args {file, printast, printlatex = False, printpretty, printtypes} = do
       hadBindErrors <- case bindCheck ast of
         Nothing -> return False
         Just e -> do
-            putStr $ showErrors "Bind Error" src e
-            return True
+          putStr $ showErrors "Bind Error" src e
+          return True
       case typeCheck ast of
         Left err -> do
           putErr $ "\n\n" ++ showErrors "Type Error" src err
           exit $ if hadBindErrors then 9 else 3
         Right checkResults -> do
-          putStrLn "Checks passed"
+          putStrLn $ "\n" ++ if hadBindErrors
+            then "TypeChecks passed, BindCheck failed"
+            else "Checks passed"
           when printtypes (putStr $ unlines $ map printCheckResult checkResults)
           exit $ if hadBindErrors then 2 else 0
 
@@ -87,10 +89,8 @@ showErrors errType src errs =
     
 
 printCheckResult :: CheckResult -> String
-printCheckResult (rule, bind) = unlines
-    [ "Binds for rule " ++ (bold $ name rule)
-    , unlines $ map format $ toList bind
-    ]
-    where format (v,t) =
-            "    " ++ (bold $ pprint v) ++ " :: " ++ pprint t
+printCheckResult (rule, bind) = unlines $
+    ("Binds for rule " ++ (bold $ name rule)) : (map format $ toList bind)
+    where
+        format (v,t) = "    " ++ (bold $ pprint v) ++ " :: " ++ pprint t
 
