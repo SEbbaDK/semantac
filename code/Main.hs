@@ -3,7 +3,7 @@
 
 module Main where
 import           Control.Monad         (forM_, when)
-import           Data.Map.Strict       (Map, foldlWithKey)
+import           Data.Map.Strict       (Map, toList)
 import           Data.Semigroup        ((<>))
 import           Data.List             (intercalate)
 import           Errors                (Error (Error), showError, bold)
@@ -27,7 +27,7 @@ data Args
     , printast    :: Bool
     , printpretty :: Bool
     , printlatex  :: Bool
-    , printbinds  :: Bool
+    , printtypes  :: Bool
     }
 
 parser :: Parser Args
@@ -52,7 +52,7 @@ cli :: Args -> IO Int
 cli Args {file, printast, printlatex = True} = do
   putStrLn "latex mode"
   exit 0
-cli Args {file, printast, printlatex = False, printpretty, printbinds} = do
+cli Args {file, printast, printlatex = False, printpretty, printtypes} = do
   src <- readFile file
   case doParse file src of
     Left err -> do
@@ -61,20 +61,18 @@ cli Args {file, printast, printlatex = False, printpretty, printbinds} = do
     Right ast -> do
       when printast (putStrLn $ show ast)
       when printpretty (putStrLn $ pprint ast)
-
       hadBindErrors <- case bindCheck ast of
         Nothing -> return False
         Just e -> do
             putStr $ showErrors "Bind Error" src e
             return True
-
       case typeCheck ast of
         Left err -> do
           putErr $ "\n\n" ++ showErrors "Type Error" src err
           exit $ if hadBindErrors then 9 else 3
-        Right checkResults  -> do
+        Right checkResults -> do
           putStrLn "Checks passed"
-          when printbinds (putStr $ unlines $ map printCheckResult checkResults)
+          when printtypes (putStr $ unlines $ map printCheckResult checkResults)
           exit $ if hadBindErrors then 2 else 0
 
 exit 0 = Exit.exitWith $ Exit.ExitSuccess
@@ -90,10 +88,9 @@ showErrors errType src errs =
 
 printCheckResult :: CheckResult -> String
 printCheckResult (rule, bind) = unlines
-    [ "Binds for rule " ++ name rule
-    , printBinds bind
+    [ "Binds for rule " ++ (bold $ name rule)
+    , unlines $ map format $ toList bind
     ]
-
-printBinds :: Map Variable Type -> String
-printBinds = foldlWithKey (\a x type_ -> a ++ "\n" ++ show x ++ " :: " ++ show type_) []
+    where format (v,t) =
+            "    " ++ (bold $ pprint v) ++ " :: " ++ pprint t
 

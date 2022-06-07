@@ -68,10 +68,11 @@ showPosInSource pos src = unlines $ fst $ foldl mark ([], 1) $ lines src
       | index > l1 && index < l2   = (res ++ lined (l1,l2) index 0  len line, index + 1)
       | otherwise                  = (res, index + 1)
         where len = length line
+              untab = map (\c -> if c == '\t' then ' ' else c)
               lined (l1,l2) index c1 c2 line | l1 == l2 =
-                dividedNumberedLines " | " index [ line, underline c1 c2 line ]
+                dividedNumberedLines " | " index [ untab line, underline c1 c2 line ]
               lined (l1,l2) index c1 c2 line =
-                dividedNumberedLines " | " index [ line ]
+                dividedNumberedLines " | " index [ untab line ]
 
 
 showLocInSource :: Loc a -> String -> String
