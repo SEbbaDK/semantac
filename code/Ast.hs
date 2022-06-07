@@ -1,5 +1,7 @@
 module Ast where
 
+import           Data.List           (find)
+
 import           Loc
 import           Types
 
@@ -19,6 +21,9 @@ data TermDecl
     }
     deriving (Show, Eq, Ord)
 
+termLookup :: String -> [Loc TermDecl] -> Maybe (Loc TermDecl)
+termLookup name terms = find ((== name) . dName . unLoc) terms
+
 data CategoryDecl
   = CategoryDecl
     { cName :: String
@@ -26,6 +31,9 @@ data CategoryDecl
     , cIn   :: Bool
     }
   deriving (Show, Eq, Ord)
+
+categoryLookup :: String -> [Loc CategoryDecl] -> Maybe (Loc CategoryDecl)
+categoryLookup name cats = find ((== name) . cName . unLoc) cats
 
 data SystemDecl
   = SystemDecl

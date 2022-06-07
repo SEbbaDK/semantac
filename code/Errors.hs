@@ -36,6 +36,7 @@ data RuleError
   | UndefinedTerm (Loc String)
   | UndefinedVar Node [Variable]
   | UnusedVar Node [Variable]
+  | MultidefinedVar Variable [Node]
   | UnreachablePremise Node
   | UndefinedArrow (Loc String)
   | UndefinedType (Loc String)
@@ -100,6 +101,15 @@ showRuleError src err = case err of
         , "The variables not being used are: [ " ++ (unwords $ map pprint vars) ++ " ]"
         , showPosInSource (nodePos node) src
         ]
+    MultidefinedVar var nodes ->
+        [ header $ "Multiple definitions of the variable " ++ pprint var
+        , "  The variable " ++ pprint var ++ " is defined in multiple places:"
+        ] ++ map nodeExpl nodes
+          where
+            nodeExpl node = intercalate "\n"
+                [ "  • Definition in " ++ nodeExplanation node
+                , showPosInSource (nodePos node) src
+                ]
     UnreachablePremise node ->
         [ header $ nodeExplanation node ++ " is not reachable via any variables."
         , "None of the variables in the premise are used in rules required to reach the conclusion or reachable from the initial configuration."

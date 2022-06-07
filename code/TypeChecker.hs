@@ -142,14 +142,11 @@ inferVarEx (VBind v l r) = do
 inferVar :: Variable -> TCResult RuleError Type
 inferVar Variable { typeName = Just tName } = do
     TCState { categories } <- get
-    case lookupTypeDirect tName categories of
+    case categoryLookup tName categories of
         Nothing        -> returnError $ UndefinedType (fakeLoc tName)
         Just (Loc _ c) -> return $ cType c
 inferVar x =
     TVar <$> typeVarOf x
-
-lookupTypeDirect :: String -> [Loc CategoryDecl] -> Maybe (Loc CategoryDecl)
-lookupTypeDirect name cats = find ((== name) . cName . unLoc) cats
 
 inferExpr :: Pos -> Expr -> TCResult RuleError Type
 inferExpr pos (EVar v) = inferVarEx v
@@ -233,7 +230,7 @@ lookupSystem pos systemArrow = do
 lookupTerm :: Pos -> String -> TCResult RuleError Type
 lookupTerm pos name = do
     TCState { terms } <- get
-    case find ((name ==) . dName . unLoc) terms of
+    case termLookup name terms of
         Just dec -> return $ dType (unLoc dec)
         Nothing  -> returnError (UndefinedTerm (Loc pos name))
 
@@ -280,7 +277,7 @@ returnError err = do
 lookupType :: Pos -> String -> TCResult RuleError Type
 lookupType p name = do
     TCState { categories } <- get
-    case lookupTypeDirect name categories of
+    case categoryLookup name categories of
         Just c  -> return $ cType $ unLoc c
         Nothing -> returnError $ UndefinedType (Loc p name)
 

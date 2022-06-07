@@ -3,14 +3,14 @@
 module Binding where
     
 import Ast
-import Loc
 import Errors
 import Graph
+import Loc
+import Types
 
 import qualified Data.Set as Set
 import Data.Set (Set, isSubsetOf, union, unions, intersection, difference)
 import qualified Data.Map as Map
-import Data.Map (Map)
 import Debug.Trace -- TODO: Remove
 import Data.List (nub)
 unique = nub
@@ -23,19 +23,22 @@ type BindRuleError = RuleError
 type BindRuleResult = Maybe [BindRuleError]
 type BindRuleResultOr a = Either [BindRuleError] a
 
+type TermLookup = (String -> Maybe Type)
+
 bindCheck :: Specification -> Maybe [Error BindError]
 bindCheck (Specification decs cats systems rules) = result
     where
-        ruleChecks = concatMaybe $ map bindCheckRule rules
+        lookupper :: TermLookup
+        lookupper name = fmap (dType . unLoc) $ termLookup name decs
+        ruleChecks = concatMaybe $ map (bindCheckRule lookupper) rules
         mapper :: SpecificationError -> Error SpecificationError
         mapper e = case e of
             RuleError r e -> Error ([CRule r], RuleError r e)
             x -> Error ([], x)
         result = fmap (map mapper) ruleChecks
 
-
-bindCheckRule :: Loc Rule -> BindResult
-bindCheckRule r =
+bindCheckRule :: TermLookup -> Loc Rule -> BindResult
+bindCheckRule t r =
   let
     (start, prems, end) = graphify $ unLoc r
     nodes = start : end : prems
@@ -52,33 +55,47 @@ bindCheckRule r =
         else errorify $ map UnreachablePremise untouched
           where untouched = filter (\x -> notElem x b && notElem x f) nodes
 
-backwardSearch nodes end =
-    search UndefinedVar reqsOf (zip nodes $ map givenBy nodes) [] [end]
+forwardSearch :: [Node] -> Node -> BindRuleResultOr [Node]
 forwardSearch nodes start =
-    search UnusedVar givenBy (zip nodes $ map reqsOf nodes) [] [start]
+    search UnusedVar s [] [start]
+        where
+            s n = sources (zip nodes $ map reqsOf nodes) (givenBy n) (givenBy n) []
+backwardSearch :: [Node] -> Node -> BindRuleResultOr [Node]
+backwardSearch nodes end =
+    checkDupes nodes $ search UndefinedVar s [] [end]
+        where
+            s n = sources (zip nodes $ map givenBy nodes) (reqsOf n) (reqsOf n) []
+            checkDupes nodes srch = let
+                node2varnodemap n = Map.fromList $ map (\v -> (v,[n])) $ Set.toList $ givenBy n
+                var2nodes = foldl (Map.unionWith (++)) Map.empty $ map node2varnodemap nodes
+                multidefines = filter (\(v,ns) -> length ns > 1) $ Map.toList var2nodes
+              in
+                case null multidefines of
+                  True  -> srch
+                  False -> Left $ map (\(v,n) -> MultidefinedVar v n) multidefines
 
 -- Searches either towards base or conclusion
 search :: (Node -> [Variable] -> RuleError)
-       -> (Node -> Set Variable)
-       -> [(Node, Set Variable)]
+       -> (Node -> Either (Set Variable) [Node])
        -> [Node]
        -> [Node]
        -> BindRuleResultOr [Node]
-search err varFunc nv seen [] = Right $ unique seen
-search err varFunc nv seen (n:xs) = let
-    reqs = varFunc n
-    pros = sources nv reqs reqs []
-  in
-    case pros of
+search err s seen []     = Right $ unique seen
+search err s seen (n:xs) =
+    case s n of
         Left vars -> Left $
             [ err n $ Set.toList vars ]
-        Right nodes -> search err varFunc nv (n : seen) (xs ++ unseen)
+        Right nodes -> search err s (n : seen) (xs ++ unseen)
             where unseen = filter (\n -> n `notElem` seen) nodes
 
 -- Finds all variables that supplies parts of the set
 -- Throws right if enough sources are found
 -- Throws left if not all sources are found
-sources :: [(Node, Set Variable)] -> Set Variable -> Set Variable -> [Node] -> Either (Set Variable) [Node]
+sources :: [(Node, Set Variable)]
+        -> Set Variable
+        -> Set Variable
+        -> [Node]
+        -> Either (Set Variable) [Node]
 sources [] unseenVars _ nodes =
     if Set.null unseenVars
         then Right nodes
@@ -120,6 +137,7 @@ varsOfVarExpr (VRef v) = Set.singleton v
 
 varsOfExpr :: Expr -> Set Variable
 varsOfExpr (EVar  v)   = varsOfVarExpr v
+varsOfExpr (ELit _ _)  = Set.empty
 varsOfExpr (ECall e p) = (varsOfExpr e) `union` (unions $ map varsOfExpr p)
 varsOfExpr (EEq   l r) = varsOfExpr l `union` varsOfExpr r
 varsOfExpr (EInEq l r) = varsOfExpr l `union` varsOfExpr r
