@@ -24,13 +24,14 @@ type BindRuleResult = Maybe [BindRuleError]
 type BindRuleResultOr a = Either [BindRuleError] a
 
 type TermLookup = (String -> Maybe Type)
+type VarFilter = Set Variable -> Set Variable
 
 bindCheck :: Specification -> Maybe [Error BindError]
 bindCheck (Specification decs cats systems rules) = result
     where
         lookupper :: TermLookup
         lookupper name = fmap (dType . unLoc) $ termLookup name decs
-        ruleChecks = concatMaybe $ map (bindCheckRule lookupper) rules
+        ruleChecks = mconcat $ map (bindCheckRule lookupper) rules
         mapper :: SpecificationError -> Error SpecificationError
         mapper e = case e of
             RuleError r e -> Error ([CRule r], RuleError r e)
@@ -39,40 +40,52 @@ bindCheck (Specification decs cats systems rules) = result
 
 bindCheckRule :: TermLookup -> Loc Rule -> BindResult
 bindCheckRule t r =
-  let
-    (start, prems, end) = graphify $ unLoc r
-    nodes = start : end : prems
-    backRes = backwardSearch nodes end
-    foreRes = forwardSearch nodes start
-    errorify e = Just $ map (RuleError r) e
-  in
+    let
+        (start, prems, end) = graphify $ unLoc r
+        nodes = start : end : prems
+
+        varIsNotTerm (Variable Nothing n 0 False) = (t n) == Nothing
+        varIsNotTerm _ = False
+        filterTerms = Set.filter varIsNotTerm
+
+        backRes = backwardSearch filterTerms nodes end
+        foreRes = forwardSearch filterTerms nodes start
+        searchErrs = combineSearches nodes backRes foreRes
+        dupeErrs = checkDupes nodes
+        errorify = map (RuleError r)
+    in
+        fmap errorify $ dupeErrs `mappend` searchErrs
+
+combineSearches nodes backRes foreRes =
     case (backRes, foreRes) of
-      (Left be, Left fe) -> errorify $ be ++ fe
-      (Left be, _)       -> errorify be
-      (_      , Left fe) -> errorify fe
+      (Left be, Left fe) -> Just $ be ++ fe
+      (Left be, _)       -> Just be
+      (_      , Left fe) -> Just fe
       (Right b, Right f) -> if null untouched
         then Nothing
-        else errorify $ map UnreachablePremise untouched
+        else Just $ map UnreachablePremise untouched
           where untouched = filter (\x -> notElem x b && notElem x f) nodes
 
-forwardSearch :: [Node] -> Node -> BindRuleResultOr [Node]
-forwardSearch nodes start =
+checkDupes :: [Node] -> BindRuleResult
+checkDupes nodes = let
+    node2varnodemap n = Map.fromList $ map (\v -> (v,[n])) $ Set.toList $ givenBy n
+    var2nodes = foldl (Map.unionWith (++)) Map.empty $ map node2varnodemap nodes
+    multidefines = filter (\(v,ns) -> length ns > 1) $ Map.toList var2nodes
+  in
+    case null multidefines of
+      True  -> Nothing
+      False -> Just $ map (\(v,n) -> MultidefinedVar v n) multidefines
+
+forwardSearch :: VarFilter -> [Node] -> Node -> BindRuleResultOr [Node]
+forwardSearch termfilter nodes start =
     search UnusedVar s [] [start]
         where
-            s n = sources (zip nodes $ map reqsOf nodes) (givenBy n) (givenBy n) []
-backwardSearch :: [Node] -> Node -> BindRuleResultOr [Node]
-backwardSearch nodes end =
-    checkDupes nodes $ search UndefinedVar s [] [end]
+            s n = sources (zip nodes $ map (termfilter . reqsOf) nodes) (termfilter $ givenBy n) (termfilter $ givenBy n) []
+backwardSearch :: VarFilter -> [Node] -> Node -> BindRuleResultOr [Node]
+backwardSearch termfilter nodes end =
+     search UndefinedVar s [] [end]
         where
-            s n = sources (zip nodes $ map givenBy nodes) (reqsOf n) (reqsOf n) []
-            checkDupes nodes srch = let
-                node2varnodemap n = Map.fromList $ map (\v -> (v,[n])) $ Set.toList $ givenBy n
-                var2nodes = foldl (Map.unionWith (++)) Map.empty $ map node2varnodemap nodes
-                multidefines = filter (\(v,ns) -> length ns > 1) $ Map.toList var2nodes
-              in
-                case null multidefines of
-                  True  -> srch
-                  False -> Left $ map (\(v,n) -> MultidefinedVar v n) multidefines
+            s n = sources (zip nodes $ map (termfilter . givenBy) nodes) (termfilter $ reqsOf n) (termfilter $ reqsOf n) []
 
 -- Searches either towards base or conclusion
 search :: (Node -> [Variable] -> RuleError)
@@ -121,23 +134,16 @@ givenBy (PremNode (Loc _ prem)) = case prem of
   PDefinition e _                     -> varsOfExpr e
   PConstraint _                       -> Set.empty
 
-concatMaybe :: [Maybe [a]] -> Maybe [a]
-concatMaybe = foldr combineMaybe Nothing
-
-combineMaybe :: Maybe [a] -> Maybe [a] -> Maybe [a]
-combineMaybe Nothing o = o
-combineMaybe o Nothing = o
-combineMaybe (Just e1) (Just e2) = Just $ e1 ++ e2
-
 -- TODO: This is probably incorrect. The bindings should not count as definitions
 --       but as uses when it comes to requirements etc.
 varsOfVarExpr :: VariableExpr -> Set Variable
 varsOfVarExpr (VBind v l r) = Set.insert l $ varsOfVarExpr v `union` varsOfExpr r
-varsOfVarExpr (VRef v) = Set.singleton v
+varsOfVarExpr (VRef v) = case literal v of
+    True  -> Set.empty
+    False -> Set.singleton v
 
 varsOfExpr :: Expr -> Set Variable
 varsOfExpr (EVar  v)   = varsOfVarExpr v
-varsOfExpr (ELit _ _)  = Set.empty
 varsOfExpr (ECall e p) = (varsOfExpr e) `union` (unions $ map varsOfExpr p)
 varsOfExpr (EEq   l r) = varsOfExpr l `union` varsOfExpr r
 varsOfExpr (EInEq l r) = varsOfExpr l `union` varsOfExpr r

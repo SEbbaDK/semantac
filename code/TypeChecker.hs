@@ -140,13 +140,10 @@ inferVarEx (VBind v l r) = do
 -- TODO: This should make the inferred variable need to be a
 --       function if there is bindings
 inferVar :: Variable -> TCResult RuleError Type
-inferVar Variable { typeName = Just tName } = do
-    TCState { categories } <- get
-    case categoryLookup tName categories of
-        Nothing        -> returnError $ UndefinedType (fakeLoc tName)
-        Just (Loc _ c) -> return $ cType c
-inferVar x =
-    TVar <$> typeVarOf x
+inferVar Variable { typeName = Just tName }
+    = lookupType fakePos tName
+inferVar x
+    = TVar <$> typeVarOf x
 
 inferExpr :: Pos -> Expr -> TCResult RuleError Type
 inferExpr pos (EVar v) = inferVarEx v

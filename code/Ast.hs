@@ -73,26 +73,13 @@ data Variable
     { typeName :: Maybe String
     , varName  :: String
     , marks    :: Int
+    , literal  :: Bool
     }
-  deriving (Show, Eq)
+  deriving (Show, Eq, Ord)
 
 rootVariable :: VariableExpr -> Variable
 rootVariable (VRef v) = v
 rootVariable (VBind v _ _) = rootVariable v
-
-instance Ord Variable where
-    compare (Variable t1 n1 m1) (Variable t2 n2 m2) = let
-        tc = compare t1 t2
-        nc = compare n1 n2
-        mc = compare m1 m2
-      in
-        if tc /= EQ
-            then tc
-            else if nc /= EQ
-                then nc
-                else mc
-    (<=) v1 v2 =
-        GT /= compare v1 v2
 
 data Expr
   = EVar VariableExpr

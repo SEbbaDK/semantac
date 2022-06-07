@@ -44,10 +44,15 @@ plusWs p = do
   ws
   return res
 
+quoted = betweenCharEscaped '"'
+
 categoryNameParser :: Parser String
-categoryNameParser = do
+categoryNameParser = some letterChar
+
+ruleNameParser :: Parser String
+ruleNameParser = do
   c <- try upperChar
-  rest <- many letterChar
+  rest <- many alphaNumChar
   return $ c : rest
 
 systemNameParser :: Parser String
@@ -91,7 +96,7 @@ betweenCharEscaped delimiter = do
 baseTypeParser :: Parser Type
 baseTypeParser =
   try (between (string "(" >> ws) (ws >> ")") typeParser)
-    <|> try (fmap TPrimitive (betweenCharEscaped '"'))
+    <|> try (fmap TPrimitive quoted)
     <|> try (value (string "Syntax") tSyntax)
     <|> try (value (string "Bool") tBool)
     <|> fmap TAlias categoryNameParser
@@ -133,7 +138,7 @@ categoryParser = do
   ws
   name <- categoryNameParser
   ws
-  isIn <- value (try (char '=')) False <|> value (char '∈') True
+  isIn <- value (try $ char '=') False <|> value (try (string "∈") <|> string "in") True
   ws
   type_ <- typeParser
   ws
@@ -167,8 +172,18 @@ variableParser = do
   name <- option "" $ char '_' >> some alphaNumChar
   marks <- many (char '\'')
   if name == ""
-      then return $ Variable Nothing     base (length marks)
-      else return $ Variable (Just base) name (length marks)
+      then return $ Variable
+        { typeName = Nothing
+        , varName  = base
+        , marks    = length marks
+        , literal  = False
+        }
+      else return $ Variable
+        { typeName = Just base
+        , varName  = name
+        , marks    = length marks
+        , literal  = False
+        }
 
 variableExprParser :: Parser VariableExpr
 variableExprParser = do
@@ -183,7 +198,7 @@ syntaxElementParser = do
   return elems
   where
     elemSyntaxParser :: Parser SyntaxElem
-    elemSyntaxParser = Syntax <$> betweenCharEscaped '"'
+    elemSyntaxParser = Syntax <$> quoted
 
     elemVarParser :: Parser SyntaxElem
     elemVarParser    = Var <$> variableExprParser
@@ -211,14 +226,27 @@ transParser = do
 exprParamParser :: Parser [Expr]
 exprParamParser = betweenS "(" (exprParser `sepBy` (ws >> string "," >> ws)) ")"
 
-exprParser :: Parser Expr
-exprParser = do
+exprVarOrCallParser = do
   v <- EVar <$> variableExprParser
-  params <- option Nothing $ try (Just <$> exprParamParser)
+  params <- option Nothing (Just <$> exprParamParser)
   -- TODO: Make this actually parse expressions properly
   case params of
       Nothing -> return v
       Just ps -> return $ ECall v ps
+
+exprLiteralParser = do
+  lit <- quoted
+  t <- option Nothing (try $ Just <$> (ws >> string ":" >> ws >> categoryNameParser))
+  return $ EVar $ VRef $ Variable
+    { typeName = t
+    , varName  = lit
+    , marks    = 0
+    , literal  = True
+    }
+
+exprParser :: Parser Expr
+exprParser = do
+  try exprLiteralParser <|> exprVarOrCallParser
 
 eqDefParser :: Parser Premise
 eqDefParser = do
@@ -241,7 +269,7 @@ ruleParser = do
   ws
   string "rule"
   ws
-  name <- categoryNameParser
+  name <- ruleNameParser
   ws
   premises <- many $ plusWs $ locced $ premiseParser
   ws
