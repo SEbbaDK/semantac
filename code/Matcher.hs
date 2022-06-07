@@ -9,16 +9,16 @@ import TypeChecker
 import Pretty -- TEMP
 
 import Control.Monad       (zipWithM)
-import Control.Monad.State (State, evalState, get, evalStateT)
+import Control.Monad.State (State, evalState, get, evalStateT, gets)
 import qualified Data.Map as Map
 
 type TypeMatcher = VariableExpr -> Type -> Bool
 type MatcherState a = State (Specification, TypeMatcher) a
 
 getSpec :: MatcherState Specification
-getSpec = fmap fst get
+getSpec = gets fst
 getTypeMatcher :: MatcherState TypeMatcher
-getTypeMatcher = fmap snd get
+getTypeMatcher = gets snd
 
 equalLength a b = length a == length b
 
@@ -43,12 +43,12 @@ confMatch spec (typemap, Loc _ (Conf a)) (Conf b) =
 
 confListMatch :: [SyntaxList] -> [SyntaxList] -> MatcherState Bool
 confListMatch a b = do
-    matches <- fmap and $ zipWithM syntaxListMatch a b
+    matches <- and <$> zipWithM syntaxListMatch a b
     return $ equalLength a b && matches
 
 syntaxListMatch :: SyntaxList -> SyntaxList -> MatcherState Bool
 syntaxListMatch a b = do
-    matches <- fmap and $ zipWithM syntaxMatch a b
+    matches <- and <$> zipWithM syntaxMatch a b
     return $ equalLength a b && matches
 
 syntaxMatch :: Loc SyntaxElem -> Loc SyntaxElem -> MatcherState Bool
