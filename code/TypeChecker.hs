@@ -269,8 +269,8 @@ bindVar tv t =
 --     TCState { subs } <- get
 --     subst subs t
 
--- \texttt{substTC} performs a substitution using the current substitution map.
--- The \texttt{subst} function traverses the given type and replaces type variables with the types that they map to in the substitution map if they are defined there.
+-- `substTC` performs a substitution using the current substitution map.
+-- The `subst` function traverses the given type and replaces type variables with the types that they map to in the substitution map if they are defined there.
 
 returnError :: a -> TypeChecker (Either (Error a)) b
 returnError err = do
