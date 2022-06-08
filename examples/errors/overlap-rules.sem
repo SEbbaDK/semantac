@@ -1,0 +1,9 @@
+system Syntax => Bool
+
+rule Overlap
+----------
+<a> => <a>
+
+rule Overlap
+----------
+<b> => <b>
