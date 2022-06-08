@@ -36,6 +36,7 @@ data RuleError
   | UndefinedTerm (Loc String)
   | UndefinedVar Node [Variable]
   | UnusedVar Node [Variable]
+  | UseUnusableVar Node [Variable]
   | MultidefinedVar Variable [Node]
   | UnreachablePremise Node
   | UndefinedArrow (Loc String)
@@ -94,13 +95,20 @@ showRuleError src err = case err of
         , showPosInSource p src
         ]
     UndefinedVar node vars ->
-        [ header $ "Unbound variables in " ++ nodeExplanation node
+        [ header $ "Unbound variables in " ++ nodeExplanation node ++ "."
         , "The unbound variables are: [ " ++ (unwords $ map pprint vars) ++ " ]"
         , showPosInSource (nodePos node) src
         ]
     UnusedVar node vars ->
-        [ header $ "Unused variables in " ++ nodeExplanation node
+        [ header $ "Unused variables in " ++ nodeExplanation node ++ "."
         , "The variables not being used are: [ " ++ (unwords $ map pprint vars) ++ " ]"
+        , showPosInSource (nodePos node) src
+        ]
+    UseUnusableVar node vars ->
+        [ header $ "Node uses a variable that is marked as unused"
+        , "The variables marked as unused are: [ " ++ (unwords $ map pprint vars) ++ " ] and they're used in " ++ nodeExplanation node ++ "."
+        , ""
+        , "Nodes that start with an underscore (_a or _) shouldn't be used in places like expressions and final configurations, because their use is supposed to mark a variable that will not be used. Use them only in defining configurations (ie. <a,_e> -> <a>)."
         , showPosInSource (nodePos node) src
         ]
     MultidefinedVar var nodes ->
@@ -109,7 +117,7 @@ showRuleError src err = case err of
         ] ++ map nodeExpl nodes
           where
             nodeExpl node = intercalate "\n"
-                [ "  • Definition in " ++ nodeExplanation node
+                [ "  • Definition in " ++ nodeExplanation node ++ "."
                 , showPosInSource (nodePos node) src
                 ]
     UnreachablePremise node ->

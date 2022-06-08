@@ -55,11 +55,12 @@ bindCheckRule t r =
 
         backRes = backwardSearch filterTerms nodes end
         foreRes = forwardSearch filterTerms nodes start
-        searchErrs = combineSearches nodes backRes foreRes
-        dupeErrs = checkDupes nodes
+        errSearch = combineSearches nodes backRes foreRes
+        errDupe = checkDupes nodes
+        errUnused = checkUseUnused nodes
         errorify = map (RuleError r)
     in
-        fmap errorify $ dupeErrs `mappend` searchErrs
+        fmap errorify $ mconcat [ errDupe, errUnused, errSearch ]
 
 combineSearches nodes backRes foreRes =
     case (backRes, foreRes) of
@@ -70,6 +71,11 @@ combineSearches nodes backRes foreRes =
         then Nothing
         else Just $ map UnreachablePremise untouched
           where untouched = filter (\x -> notElem x b && notElem x f) nodes
+
+checkUseUnused nodes =
+    mconcat $ map (\n -> vars2Errs n $ filter unused $ Set.toList $ reqsOf n) nodes
+        where vars2Errs _ [] = Nothing
+              vars2Errs n v  = Just [ UseUnusableVar n v ]
 
 checkDupes :: [Node] -> BindRuleResult
 checkDupes nodes = let
