@@ -58,18 +58,18 @@ showSpecError :: String -> SpecificationError -> Lines
 showSpecError src (DefinitionError e)      = showDefinitionError src e
 showSpecError src (RuleError ruleName e)   = showRuleError src e
 
-overlapGenerator name access src overlaps =
-    [ header $ "Overlapping " ++ name ++ " declarations."
-    , "The " ++ name ++ " '" ++ (access $ unLoc $ head overlaps) ++
-        "' is declared multiple times."
-    , concat $ map (\t -> showPosInSource (pos t) src) overlaps
-    ]
-
 showDefinitionError src err = case err of
     OverlappingTerms o -> overlapGenerator "term" dName src o
     OverlappingCategories o -> overlapGenerator "category" cName src o
     OverlappingSystems o -> overlapGenerator "system" arrow src o
     OverlappingRules o -> overlapGenerator "rule" name src o
+    where
+        overlapGenerator name access src overlaps =
+            [ header $ "Overlapping " ++ name ++ " declarations."
+            , "The " ++ name ++ " '" ++ (access $ unLoc $ head overlaps) ++
+                "' is declared multiple times."
+            , concat $ map (\t -> showPosInSource (pos t) src) overlaps
+            ]
 
 showRuleError :: String -> RuleError -> Lines
 showRuleError src err = case err of
