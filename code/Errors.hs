@@ -68,7 +68,10 @@ showDefinitionError src err = case err of
             [ header $ "Overlapping " ++ name ++ " declarations."
             , "The " ++ name ++ " '" ++ (access $ unLoc $ head overlaps) ++
                 "' is declared multiple times."
-            , concat $ map (\t -> showPosInSource (pos t) src) overlaps
+            , concat $ map (\t -> "\n" ++ concat
+                [ "  Definition at " ++ showPos (pos t)
+                , showPosInSource (pos t) src
+                ]) overlaps
             ]
 
 showRuleError :: String -> RuleError -> Lines
