@@ -58,7 +58,7 @@ dividedNumberedLines divider number lines =
   in first : rest
 
 showPosInSource :: Pos -> String -> String
-showPosInSource pos src = unlines $ fst $ foldl mark ([], 1) $ lines src
+showPosInSource pos src = (\s -> '\n' : s) $ unlines $ fst $ foldl mark ([], 1) $ lines src
   where
     ((_,l1,c1), (_,l2,c2)) = pos
     mark (res, index) line
