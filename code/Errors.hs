@@ -73,12 +73,14 @@ showSystemError _ = ["todo"]
 showRuleError :: String -> RuleError -> Lines
 showRuleError src err = case err of
     TypeMismatch (Loc p1 t1) (Loc p2 t2) ->
-        [ header $ "Type mismatch between: " ++ showPos p1
+        [ header $ "Type mismatch"
+        , "  Type at " ++ showPos p1
         , showPosInSource p1 src
-        , header $ "  and: " ++ showPos p2
+        , "  and " ++ showPos p2
         , showPosInSource p2 src
         , bold $ "  Expected: " ++ highlight (pprint t2)
         , bold $ "  Received: " ++ highlight (pprint t1)
+        , ""
         ]
     InifiniteType tv (Loc p t) ->
         -- This message is kinda impossible to understand I think.

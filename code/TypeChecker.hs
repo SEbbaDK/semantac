@@ -104,9 +104,9 @@ checkTransitionHelper sys Transition { before, after } = do
         mapError (mismatch sys final) $ unify (pos after) (pos final) tl tr
     return ()
     where
-        mismatch :: Loc SystemDecl -> Loc Type -> Error RuleError -> Error RuleError
-        mismatch sys sysdef (Error (s, TypeMismatch use def)) =
-            Error (s, ConfTypeMismatch use def $ Loc (pos sysdef) $ unLoc sys)
+        mismatch :: Loc SystemDecl -> Loc Type -> RuleError -> RuleError
+        mismatch sys sysdef (TypeMismatch use def) =
+            ConfTypeMismatch use def $ Loc (pos sysdef) $ unLoc sys
         mismatch _ _ e = e
 
 checkEquality :: Pos -> Pos -> Expr -> Expr -> TCResult RuleError ()
@@ -183,10 +183,10 @@ unify lp rp lt rt =
         (TCross [lt], _) -> unify lp rp lt rt
         (TUnion [lt], _) -> unify lp rp lt rt
         (TUnion lts, _)  -> unifyUnion lp rp lts lts rt
-        (_, TAlias x)    -> unify rp lp (TAlias x) lt
-        (_, TVar tv)     -> unify rp lp (TVar tv) lt
-        (_, TCross rts)  -> unify rp lp (TCross rts) lt
-        (_, TUnion rts)  -> unify rp lp (TUnion rts) lt
+        (_, TAlias x)    -> swap $ unify rp lp (TAlias x) lt
+        (_, TVar tv)     -> swap $ unify rp lp (TVar tv) lt
+        (_, TCross rts)  -> swap $ unify rp lp (TCross rts) lt
+        (_, TUnion rts)  -> swap $ unify rp lp (TUnion rts) lt
         -- We _could_ technically create a `TUnion` of the two types,
         -- but unify only gets used for constraining the types such as
         -- in an equality.
@@ -279,5 +279,12 @@ lookupType p name = do
         Just c  -> return $ cType $ unLoc c
         Nothing -> returnError $ UndefinedType (Loc p name)
 
-mapError :: (Error a -> Error b) -> TCResult a t -> TCResult b t
-mapError f = mapStateT (left f)
+swap = mapError m
+    where
+        m (TypeMismatch a b) = TypeMismatch b a
+        m e = e
+
+mapError :: (RuleError -> RuleError)
+         -> TCResult RuleError t
+         -> TCResult RuleError t
+mapError f = mapStateT (left . fmap $ f)
