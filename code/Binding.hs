@@ -27,11 +27,10 @@ type TermLookup = (String -> Maybe Type)
 type VarFilter = Set Variable -> Set Variable
 
 bindCheck :: Specification -> Maybe [Error BindError]
-bindCheck (Specification decs cats systems rules) =
+bindCheck spec =
     let
-        lookupper :: TermLookup
-        lookupper name = fmap (dType . unLoc) $ termLookup name decs
-        ruleChecks = mconcat $ map (bindCheckRule lookupper) rules
+        Specification terms cats systems rules = spec
+        ruleChecks = mconcat $ map (bindCheckRule spec) rules
         mapper :: SpecificationError -> Error SpecificationError
         mapper e = case e of
             RuleError r e -> Error ([CRule r], RuleError r e)
@@ -42,25 +41,30 @@ bindCheck (Specification decs cats systems rules) =
             Just [] -> Nothing
             r       -> r
 
-bindCheckRule :: TermLookup -> Loc Rule -> BindResult
-bindCheckRule t r =
+bindCheckRule :: Specification -> Loc Rule -> BindResult
+bindCheckRule spec r =
     let
+        Specification terms cats systems rules = spec
         (start, prems, end) = graphify $ unLoc r
         nodes = start : end : prems
 
+        lookupper name = fmap (dType . unLoc) $ termLookup name terms
         varIsNotTerm v = case v of
-            Variable Nothing n 0 False False -> (t n) == Nothing
+            Variable Nothing n 0 False False -> (lookupper n) == Nothing
             otherwise -> True
         filterTerms = Set.filter varIsNotTerm
+
+        errOverlap = checkTermOverlap terms nodes
+        errDupe = checkDupes nodes
+        errUnused = checkUseUnused nodes
 
         backRes = backwardSearch filterTerms nodes end
         foreRes = forwardSearch filterTerms nodes start
         errSearch = combineSearches nodes backRes foreRes
-        errDupe = checkDupes nodes
-        errUnused = checkUseUnused nodes
+
         errorify = map (RuleError r)
     in
-        fmap errorify $ mconcat [ errDupe, errUnused, errSearch ]
+        fmap errorify $ mconcat [ errOverlap, errDupe, errUnused, errSearch ]
 
 combineSearches nodes backRes foreRes =
     case (backRes, foreRes) of
@@ -72,6 +76,19 @@ combineSearches nodes backRes foreRes =
         else Just $ map UnreachablePremise untouched
           where untouched = filter (\x -> notElem x b && notElem x f) nodes
 
+checkTermOverlap :: [Loc TermDecl] -> [Node] -> BindRuleResult
+checkTermOverlap terms nodes =
+    mconcat $ map checkNode nodes
+        where
+            checkNode :: Node -> BindRuleResult
+            checkNode n = mconcat $ map checkVar $ Set.toList $ givenBy n
+                where
+                    checkVar v = fmap (var2err v) $ tlook v
+                    tlook :: Variable -> Maybe (Loc TermDecl)
+                    tlook v = termLookup (varName v) terms
+                    var2err v t = [ VariableTermOverlap n v t ]
+
+checkUseUnused :: [Node] -> BindRuleResult
 checkUseUnused nodes =
     mconcat $ map (\n -> vars2Errs n $ filter unused $ Set.toList $ reqsOf n) nodes
         where vars2Errs _ [] = Nothing

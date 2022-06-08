@@ -38,6 +38,7 @@ data RuleError
   | UnusedVar Node [Variable]
   | UseUnusableVar Node [Variable]
   | MultidefinedVar Variable [Node]
+  | VariableTermOverlap Node Variable (Loc TermDecl)
   | UnreachablePremise Node
   | UndefinedArrow (Loc String)
   | UndefinedType (Loc String)
@@ -120,6 +121,17 @@ showRuleError src err = case err of
                 [ "  • Definition in " ++ nodeExplanation node ++ "."
                 , showPosInSource (nodePos node) src
                 ]
+    VariableTermOverlap node var (Loc tp term) ->
+        [ header $ "Variable name overlaps with defined term."
+        , "The variable " ++ pprint var ++ " overlaps with the term " ++ dName term ++ "."
+        , ""
+        , "Variable used at:"
+        , showPosInSource (nodePos node) src
+        , "Term definition:"
+        , showPosInSource tp src
+        , "Variables are not allowed to 'hide' the built-in terms, as that might cause confusion to the reader and another name should be used instead"
+        , ""
+        ]
     UnreachablePremise node ->
         [ header $ nodeExplanation node ++ " is not reachable via any variables."
         , "None of the variables in the premise are used in rules required to reach the conclusion or reachable from the initial configuration."
