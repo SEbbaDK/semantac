@@ -8,10 +8,10 @@ import Graph
 import Loc
 import Types
 
+import Data.Bifunctor (first)
 import qualified Data.Set as Set
 import Data.Set (Set, isSubsetOf, union, unions, intersection, difference)
 import qualified Data.Map as Map
-import Debug.Trace -- TODO: Remove
 import Data.List (nub)
 unique = nub
 
@@ -83,9 +83,16 @@ checkDupes nodes = let
 
 forwardSearch :: VarFilter -> [Node] -> Node -> BindRuleResultOr [Node]
 forwardSearch termfilter nodes start =
-    search UnusedVar s [] [start]
+    first removeUnused $ search UnusedVar s [] [start]
         where
             s n = sources (zip nodes $ map (termfilter . reqsOf) nodes) (termfilter $ givenBy n) (termfilter $ givenBy n) []
+            mapUnused errs (UnusedVar n vars) = if null filtered
+                then errs
+                else (UnusedVar n filtered) : errs
+                    where filtered = filter (not . unused) vars
+            mapUnused errs _ = errs
+            removeUnused errs = foldl mapUnused [] errs
+
 backwardSearch :: VarFilter -> [Node] -> Node -> BindRuleResultOr [Node]
 backwardSearch termfilter nodes end =
      search UndefinedVar s [] [end]
