@@ -3,20 +3,23 @@
 
 module Main where
 import           Control.Monad         (forM_, when)
+import           Data.Bits             ((.|.))
+import           Data.List             (intercalate)
 import           Data.Map.Strict       (Map, toList)
 import           Data.Semigroup        ((<>))
-import           Data.List             (intercalate)
-import           Errors                (Error (Error), showError, bold)
 import           Options.Applicative
-import           Parser                (doParse)
 import           System.IO             (hPutStr, stderr)
-import qualified System.Exit as Exit
 import           Text.Megaparsec.Error (errorBundlePretty)
-import           TypeChecker           (typeCheck, CheckResult)
-import           Types
+import qualified System.Exit as Exit
+
 import           Ast                   (Variable, name)
 import           Binding               (bindCheck)
+import           Errors                (Error (Error), showError, bold, showErrorMessage)
+import           OverlapChecker
+import           Parser                (doParse)
 import           Pretty
+import           TypeChecker           (typeCheck, CheckResult)
+import           Types
 
 putErr :: String -> IO ()
 putErr = hPutStr stderr
@@ -45,9 +48,10 @@ main = cli =<< execParser (info (parser <**> helper) (fullDesc <> progDesc "test
 -- Error codes:
 -- 0 - Everything is fine
 -- 1 - Parsing failed
--- 2 - Bind Errors
--- 3 - Type Errors
--- 9 - Both Bind and Type Errors
+-- 2 - Overlap Errors
+-- 4 - Bind Errors
+-- 8 - Type Errors
+-- other - Bit pattern of the other errors
 cli :: Args -> IO Int
 cli Args {file, printast, printlatex = True} = do
   putStrLn "latex mode"
@@ -58,35 +62,37 @@ cli Args {file, printast, printlatex = False, printpretty, printtypes} = do
     Left err -> do
       putErr $ "Parsing Error: " ++ errorBundlePretty err
       exit 1
-    Right ast -> do
-      when printast (putStrLn $ show ast)
-      when printpretty (putStrLn $ pprint ast)
-      hadBindErrors <- case bindCheck ast of
-        Nothing -> return False
+    Right spec -> do
+      when printast (putStrLn $ show spec)
+      when printpretty (putStrLn $ pprint spec)
+      overlapExit <- case overlapCheck spec of
+        Nothing -> return 0
         Just e -> do
-          putStr $ showErrors "Bind Error" src e
-          return True
-      case typeCheck ast of
+          putStr $ showErrorsWith (showErrorMessage src) src "Overlap Error" e
+          return 2
+      bindExit <- case bindCheck spec of
+        Nothing -> return 0
+        Just e -> do
+          putStr $ showErrors src "Bind Error" e
+          return 4
+      case typeCheck spec of
         Left err -> do
-          putErr $ "\n\n" ++ showErrors "Type Error" src err
-          exit $ if hadBindErrors then 9 else 3
+          putErr $ "\n\n" ++ showErrors src "Type Error" err
+          exit $ foldl (.|.) 8 [ overlapExit, bindExit ]
         Right checkResults -> do
-          putStrLn $ "\n" ++ if hadBindErrors
-            then "TypeChecks passed, BindCheck failed"
-            else "Checks passed"
           when printtypes (putStr $ unlines $ map printCheckResult checkResults)
-          exit $ if hadBindErrors then 2 else 0
+          exit $ foldl (.|.) 0 [ overlapExit, bindExit ]
 
 exit 0 = Exit.exitWith $ Exit.ExitSuccess
 exit n = Exit.exitWith $ Exit.ExitFailure n
 
-showErrors errType src errs =
+showErrors src = showErrorsWith (showError src) src
+showErrorsWith f src errType errs =
     let
-        errList = map (showError src) errs
+        errList = map f errs
         errlistHeaders = map ((bold errType ++ ": ") ++) errList
     in
         intercalate "\n\n" errlistHeaders
-    
 
 printCheckResult :: CheckResult -> String
 printCheckResult (rule, bind) = unlines $

@@ -4,28 +4,28 @@ module Errors where
 import           Ast
 import           Data.List (intercalate)
 import           Graph
-import           Loc       (Loc (Loc), Pos, pos, showPos, showPosInSource)
+import           Loc       (Loc (Loc), Pos, pos, showPos, showPosInSource, unLoc)
 import           Pretty
 import           Types     (Type (TVar), TypeVar)
 
 newtype Error a
   = Error (ContextStack, a)
 
+unErr (Error (_, a)) = a
+
 instance Functor Error where
     fmap f (Error (ctx, val)) = Error (ctx, f val)
 
 
 data SpecificationError
-  = CategoryError CategoryError
-  | SystemError SystemError
+  = DefinitionError DefinitionError
   | RuleError (Loc Rule) RuleError
-  | MultiRuleDefinitions [Loc String]
 
--- Todo: figure out what errors you can have here
-data CategoryError = CatError
-
--- Todo: figure out what errors you can have here
-data SystemError = SysError
+data DefinitionError
+    = OverlappingTerms [Loc TermDecl]
+    | OverlappingCategories [Loc CategoryDecl]
+    | OverlappingSystems [Loc SystemDecl]
+    | OverlappingRules [Loc Rule]
 
 data RuleError
   = TypeMismatch (Loc Type) (Loc Type)
@@ -48,29 +48,28 @@ type Lines = [String]
 
 showError :: String -> Error SpecificationError -> String
 showError src e
-    = showErrorMessage src e ++
+    = showErrorMessage src (unErr e) ++
       concatMap ("  in " ++) (showStackTrace e)
 
-
-showErrorMessage :: String -> Error SpecificationError -> String
-showErrorMessage src (Error (ctx, e)) = unlines (showSpecError src e)
-
-showErrorInSource :: Error a -> String -> String
-showErrorInSource (Error (ctx, _)) src =
-    let p = contextPos $ head ctx
-    in showPosInSource p src
+showErrorMessage :: String -> SpecificationError -> String
+showErrorMessage src e = unlines (showSpecError src e)
 
 showSpecError :: String -> SpecificationError -> Lines
-showSpecError src (CategoryError e)        = showCategoryError e
-showSpecError src (SystemError e)          = showSystemError e
+showSpecError src (DefinitionError e)      = showDefinitionError src e
 showSpecError src (RuleError ruleName e)   = showRuleError src e
-showSpecError src (MultiRuleDefinitions e) = ["todo"]
 
-showCategoryError :: CategoryError -> Lines
-showCategoryError _ = ["todo"]
+overlapGenerator name access src overlaps =
+    [ header $ "Overlapping " ++ name ++ " declarations."
+    , "The " ++ name ++ " '" ++ (access $ unLoc $ head overlaps) ++
+        "' is declared multiple times."
+    , concat $ map (\t -> showPosInSource (pos t) src) overlaps
+    ]
 
-showSystemError :: SystemError -> Lines
-showSystemError _ = ["todo"]
+showDefinitionError src err = case err of
+    OverlappingTerms o -> overlapGenerator "term" dName src o
+    OverlappingCategories o -> overlapGenerator "category" cName src o
+    OverlappingSystems o -> overlapGenerator "system" arrow src o
+    OverlappingRules o -> overlapGenerator "rule" name src o
 
 showRuleError :: String -> RuleError -> Lines
 showRuleError src err = case err of

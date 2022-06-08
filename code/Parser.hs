@@ -120,8 +120,8 @@ typeParser = let
 functionNameParser :: Parser String
 functionNameParser = many alphaNumChar
 
-declarationParser :: Parser TermDecl
-declarationParser = do
+termParser :: Parser TermDecl
+termParser = do
   try (string "meta")
   ws
   name <- functionNameParser
@@ -326,8 +326,8 @@ topParser = do
     topParser_ spec = ws >>
       value eof spec
         <|> try ( do
-                d <- locced declarationParser
-                topParser_ $ spec { sTerms = d : sTerms spec }
+                t <- locced termParser
+                topParser_ $ spec { sTerms = t : sTerms spec }
             )
         <|> try ( do
                 a <- locced categoryParser
