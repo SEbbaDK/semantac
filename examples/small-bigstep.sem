@@ -1,5 +1,7 @@
 category Exp = Syntax
+category e in Exp
 category Int = "Any Integer"
+category i in Int
 
 system Exp =>e Int
 system Exp =>b Bool
@@ -9,11 +11,11 @@ meta add = (Int × Int) -> Int
 non-deterministic
 non-terminating
 rule Add
-    <e1> =>e <e1'>
-    <e2> =>e <e2'>
-    e := add(e1', e2')
------------------------------
-    <e1 "+" e2> =>e <e>
+   <e_1> =>e <i_1'>
+   <e_2> =>e <i_2'>
+ e := add(i_1', i_2')
+-----------------------
+ <e_1 "+" e_2> =>e <e>
 
 
 rule AddOne
@@ -28,12 +30,12 @@ rule IfTrue
     b == "true"
     <e2> =>e <e>
 -------------------------------------
-<"if" e1 "then" e2 "else" e3> =>e <e>
+<"if" e1 "then" e2 "else" _> =>e <e>
 
 rule IfFalse
     <e1> =>b <b>
     b == "false"
     <e3> =>e <e>
 -------------------------------------
-<"if" e1 "then" e2 "else" e3> =>e <e>
+<"if" e1 "then" _e2 "else" e3> =>e <e>
 
