@@ -27,8 +27,8 @@ type TermLookup = (String -> Maybe Type)
 type VarFilter = Set Variable -> Set Variable
 
 bindCheck :: Specification -> Maybe [Error BindError]
-bindCheck (Specification decs cats systems rules) = result
-    where
+bindCheck (Specification decs cats systems rules) =
+    let
         lookupper :: TermLookup
         lookupper name = fmap (dType . unLoc) $ termLookup name decs
         ruleChecks = mconcat $ map (bindCheckRule lookupper) rules
@@ -37,6 +37,10 @@ bindCheck (Specification decs cats systems rules) = result
             RuleError r e -> Error ([CRule r], RuleError r e)
             x -> Error ([], x)
         result = fmap (map mapper) ruleChecks
+    in
+        case result of
+            Just [] -> Nothing
+            r       -> r
 
 bindCheckRule :: TermLookup -> Loc Rule -> BindResult
 bindCheckRule t r =
@@ -44,8 +48,9 @@ bindCheckRule t r =
         (start, prems, end) = graphify $ unLoc r
         nodes = start : end : prems
 
-        varIsNotTerm (Variable Nothing n 0 False) = (t n) == Nothing
-        varIsNotTerm _ = False
+        varIsNotTerm v = case v of
+            Variable Nothing n 0 False False -> (t n) == Nothing
+            otherwise -> True
         filterTerms = Set.filter varIsNotTerm
 
         backRes = backwardSearch filterTerms nodes end
