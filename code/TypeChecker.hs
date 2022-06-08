@@ -125,9 +125,9 @@ inferConf (Loc _ (Conf xs)) = TCross <$> mapM inferConfElement xs
 
 inferSyntax :: Loc SyntaxElem -> TCResult RuleError Type
 inferSyntax (Loc p syntax) = case syntax of
-    SubElem e     -> TCross <$> mapM inferSyntax e
-    Syntax _      -> return tSyntax
-    Var v         -> inferVarEx v
+    SubElem e -> TCross <$> mapM inferSyntax e
+    Syntax _  -> return tSyntax
+    Var v     -> inferVarEx v
 
 inferVarEx :: VariableExpr -> TCResult RuleError Type
 inferVarEx (VRef v) = inferVar v
@@ -251,7 +251,7 @@ typeVarOf x = do
 bindVar :: TypeVar -> Type -> TCResult RuleError Type
 bindVar tv t =
     if tv `elem` typeVars t then
-        returnError (InifiniteType tv (fakeLoc t))
+        returnError (InfiniteType tv (fakeLoc t))
     else do
         state <- get
         let TCState { subs } = state

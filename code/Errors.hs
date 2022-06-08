@@ -2,11 +2,11 @@
 module Errors where
 
 import           Ast
-import           Graph
 import           Data.List (intercalate)
+import           Graph
 import           Loc       (Loc (Loc), Pos, pos, showPos, showPosInSource)
-import           Types     (Type (TVar), TypeVar)
 import           Pretty
+import           Types     (Type (TVar), TypeVar)
 
 newtype Error a
   = Error (ContextStack, a)
@@ -32,7 +32,7 @@ data RuleError
   -- I'm not sure if the InfiniteType error is possible given that all
   -- functions have to be explicitly declared upfront with their type
   -- signatures.
-  | InifiniteType TypeVar (Loc Type)
+  | InfiniteType TypeVar (Loc Type)
   | UndefinedTerm (Loc String)
   | UndefinedVar Node [Variable]
   | UnusedVar Node [Variable]
@@ -80,7 +80,7 @@ showRuleError src err = case err of
         , bold $ "  Expected: " ++ highlight (pprint t2)
         , bold $ "  Received: " ++ highlight (pprint t1)
         ]
-    InifiniteType tv (Loc p t) ->
+    InfiniteType tv (Loc p t) ->
         -- This message is kinda impossible to understand I think.
         -- Failure of the "occurs check" is the terminology in the literature for this type of error.
         [ header $ "Infinite type"
