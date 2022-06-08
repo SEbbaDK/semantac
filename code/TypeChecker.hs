@@ -245,7 +245,8 @@ typeVarOf x = do
         Just t -> return t
         Nothing -> do
             t <- newTypeVar
-            put state {bindings = insert x t (bindings state)}
+            newstate <- get
+            put newstate {bindings = insert x t (bindings state)}
             return t
 
 bindVar :: TypeVar -> Type -> TCResult RuleError Type
