@@ -1,0 +1,6 @@
+system Syntax => Syntax
+
+rule UseUnused
+----------
+<_a> => <_a>
+

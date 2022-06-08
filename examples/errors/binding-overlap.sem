@@ -1,0 +1,8 @@
+system (Syntax x Syntax) => Syntax
+
+meta x = Syntax
+
+rule TermOverlap
+----------
+<x> => <x>
+
