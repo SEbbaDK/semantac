@@ -3,11 +3,12 @@
 module Pretty where
 
 import           Data.List (intercalate, intersperse)
+import qualified Data.Maybe
+import           Data.Text (pack, unpack, replace)
 
 import Ast
 import Loc
 import Types
-import qualified Data.Maybe
 
 class Pretty a where
       pprint :: a -> String
@@ -71,23 +72,21 @@ instance Pretty VariableExpr where
 
 instance Pretty Variable where
   pprint Variable { typeName, varName, marks } =
-    concat $ case typeName of
-      Nothing -> [ varName, markers ]
-      Just tp -> [ tp, varnamer varName, markers ]
+    concat [ varnamer varName, replicate marks '\'' ]
       where
-        markers = replicate marks '\''
-        varnamer ""  = ""
-        varnamer "0" = "₀"
-        varnamer "1" = "₁"
-        varnamer "2" = "₂"
-        varnamer "3" = "₃"
-        varnamer "4" = "₄"
-        varnamer "5" = "₅"
-        varnamer "6" = "₆"
-        varnamer "7" = "₇"
-        varnamer "8" = "₈"
-        varnamer "9" = "₉"
-        varnamer nam = "_" ++ nam
+        replace_ a b = replace (pack a) (pack b)
+        varnamer = unpack .
+                   replace_ "_0" "₀" .
+                   replace_ "_1" "₁" .
+                   replace_ "_2" "₂" .
+                   replace_ "_3" "₃" .
+                   replace_ "_4" "₄" .
+                   replace_ "_5" "₅" .
+                   replace_ "_6" "₆" .
+                   replace_ "_7" "₇" .
+                   replace_ "_8" "₈" .
+                   replace_ "_9" "₉" .
+                   pack
 
 pprintWithSpaces list = intercalate " " (map pprint list)
 

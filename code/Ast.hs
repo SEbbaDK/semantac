@@ -74,8 +74,25 @@ data Variable
     , varName  :: String
     , marks    :: Int
     , literal  :: Bool
+    , unused   :: Bool
     }
-  deriving (Show, Eq, Ord)
+  deriving (Show)
+
+instance Eq Variable where
+    v1 == v2 = and
+        [ varName v1 == varName v2
+        , marks v1 == marks v2
+        ]
+
+instance Ord Variable where
+    v1 <= v2 =
+        varName v1 <= varName v2 ||
+        marks v1 <= marks v2
+
+    compare v1 v2 =
+        case compare (varName v1) (varName v2) of
+            EQ -> compare (marks v1) (marks v2)
+            r -> r
 
 rootVariable :: VariableExpr -> Variable
 rootVariable (VRef v) = v

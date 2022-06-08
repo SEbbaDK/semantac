@@ -166,23 +166,54 @@ bindingParser = do
   char ']'
   return ( var, val )
 
+variableColonParser = do
+  n <- some alphaNumChar
+  m <- many (char '\'')
+  char ':'
+  t <- some alphaNumChar
+  return (n, Just t, length m)
+
+variableUnderscoreParser = do
+  t <- some alphaNumChar
+  char '_'
+  n <- some alphaNumChar
+  m <- many (char '\'')
+  return (t ++ "_" ++ n, Just t, length m)
+
+variableBasicParser = do
+  n <- some alphaNumChar
+  m <- many (char '\'')
+  return (n, Nothing, length m)
+
 variableParser :: Parser Variable
 variableParser = do
-  base <- some alphaNumChar
-  name <- option "" $ char '_' >> some alphaNumChar
-  marks <- many (char '\'')
-  if name == ""
-      then return $ Variable
+  unused <- option False (value (string "_") True)
+  ntm <- option Nothing $
+          fmap Just $
+            try variableColonParser <|>
+            try variableUnderscoreParser <|>
+            variableBasicParser
+  case (unused, ntm) of
+    (False, Nothing) -> fail $ unlines
+        [ "Write either:"
+        , "  a blank variable '_'"
+        , "  an untyped variable 'a'"
+        , "  a colon-typed variable 'a:e'"
+        , "  an underscore-typed variable 'e_a'"
+        ]
+    (True, Nothing) -> return Variable
         { typeName = Nothing
-        , varName  = base
-        , marks    = length marks
+        , varName  = "_"
+        , marks    = 0
         , literal  = False
+        , unused   = True
         }
-      else return $ Variable
-        { typeName = Just base
-        , varName  = name
-        , marks    = length marks
+    (u, Just (n,t,m)) -> return Variable
+        { typeName = t
+        , varName  = n
+        , marks    = m
         , literal  = False
+        , unused   = u
         }
 
 variableExprParser :: Parser VariableExpr
@@ -242,6 +273,7 @@ exprLiteralParser = do
     , varName  = lit
     , marks    = 0
     , literal  = True
+    , unused   = False
     }
 
 exprParser :: Parser Expr
