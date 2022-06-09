@@ -6,11 +6,10 @@ module TypeChecker where
 
 import           Ast
 import           Control.Arrow       (left)
-import           Control.Monad       (foldM_, zipWithM)
+import           Control.Monad       (foldM_, zipWithM, void)
 import           Control.Monad.Cont  (lift)
 import           Control.Monad.State (MonadState (get, put), StateT (runStateT),
                                       execStateT, mapStateT, modify)
-import           Data.Bifunctor      (Bifunctor (bimap))
 import           Data.List           (find)
 import           Data.Map.Strict     as Map (Map, insert, lookup)
 import           Debug.Trace
@@ -81,10 +80,9 @@ checkPremise (Loc l (PTransition trans)) =
     context (CPremise (Loc l (PTransition trans))) $ checkTransition (Loc l trans)
 checkPremise (Loc l (PConstraint ex)) = do
     ext <- inferExpr l ex
-    unify l l ext tBool
-    return ()
+    void (unify l l ext tBool)
 checkPremise (Loc loc (PDefinition l r)) =
-    checkEquality loc loc l r
+    void (inferEquality loc loc l r)
 
 checkTransition :: Loc Transition -> TCResult RuleError ()
 checkTransition (Loc l trans) = do
@@ -109,19 +107,19 @@ checkTransitionHelper sys Transition { before, after } = do
             ConfTypeMismatch use def $ Loc (pos sysdef) $ unLoc sys
         mismatch _ _ e = e
 
-checkEquality :: Pos -> Pos -> Expr -> Expr -> TCResult RuleError ()
-checkEquality lp rp l r = do
-    t1 <- inferExpr lp l
-    t2 <- inferExpr rp r
-    unify lp rp t1 t2
-    return ()
 
 -- Inference
 
+inferEquality :: Pos -> Pos -> Expr -> Expr -> TCResult RuleError Type
+inferEquality lp rp l r = do
+    t1 <- inferExpr lp l
+    t2 <- inferExpr rp r
+    unify lp rp t1 t2
+
 inferConf :: Loc Conf -> TCResult RuleError Type
-inferConf (Loc _ (Conf xs)) = TCross <$> mapM inferConfElement xs
-    where inferConfElement [e] = inferSyntax e
-          inferConfElement lis = return tSyntax
+inferConf (Loc _ (Conf xs)) = TCross <$> mapM inferElem xs
+    where inferElem [e] = inferSyntax e
+          inferElem _ = return tSyntax
 
 inferSyntax :: Loc SyntaxElem -> TCResult RuleError Type
 inferSyntax (Loc p syntax) = case syntax of
@@ -140,21 +138,13 @@ inferVarEx (VBind v l r) = do
 -- TODO: This should make the inferred variable need to be a
 --       function if there is bindings
 inferVar :: Variable -> TCResult RuleError Type
-inferVar Variable { typeName = Just tName }
-    = lookupType fakePos tName
-inferVar x
-    = TVar <$> typeVarOf x
+inferVar Variable { typeName = Just tName } = lookupType fakePos tName
+inferVar x                                  = TVar <$> typeVarOf x
 
 inferExpr :: Pos -> Expr -> TCResult RuleError Type
 inferExpr pos (EVar v) = inferVarEx v
-inferExpr pos (EEq l r) = do
-    lt <- inferExpr pos l
-    rt <- inferExpr pos r
-    unify pos pos lt rt
-inferExpr pos (EInEq l r) = do
-    lt <- inferExpr pos l
-    rt <- inferExpr pos r
-    unify pos pos lt rt
+inferExpr pos (EEq l r) = inferEquality pos pos l r
+inferExpr pos (EInEq l r) = inferEquality pos pos l r
 inferExpr pos (ECall f args) = do
     tf <- inferExpr pos f
     ta <- TCross <$> mapM (inferExpr pos) args
