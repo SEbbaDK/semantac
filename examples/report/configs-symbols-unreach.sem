@@ -1,0 +1,16 @@
+category Int = "Integer"
+category Id = "Identifier"
+category Stmt = Syntax
+category S in Stmt
+
+category Env = Int -> Id
+category env in Env
+
+system (Syntax x Env) => (Syntax x Env)
+
+rule Seq
+<S_1, env, sto> => <S_1', env', sto'>
+       evn' := evn[a |-> 1]
+-------------------------------------
+<S_1 ";" S_2, env> => <S_1' ";" S_2>
+
