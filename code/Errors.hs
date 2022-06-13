@@ -10,6 +10,7 @@ import           Types     (Type (TVar), TypeVar)
 
 newtype Error a
   = Error (ContextStack, a)
+  deriving (Show)
 
 unErr (Error (_, a)) = a
 
@@ -20,15 +21,17 @@ instance Functor Error where
 data SpecificationError
   = DefinitionError DefinitionError
   | RuleError (Loc Rule) RuleError
+  deriving (Show)
 
 data DefinitionError
-    = OverlappingTerms [Loc TermDecl]
-    | OverlappingCategories [Loc CategoryDecl]
-    | OverlappingSystems [Loc SystemDecl]
-    | OverlappingRules [Loc Rule]
+  = OverlappingTerms [Loc TermDecl]
+  | OverlappingCategories [Loc CategoryDecl]
+  | OverlappingSystems [Loc SystemDecl]
+  | OverlappingRules [Loc Rule]
+  deriving (Show)
 
 data RuleError
-  = TypeMismatch (Loc Type) (Loc Type)
+  = TypeMismatch String (Loc Type) (Loc Type)
   -- I'm not sure if the InfiniteType error is possible given that all
   -- functions have to be explicitly declared upfront with their type
   -- signatures.
@@ -42,7 +45,8 @@ data RuleError
   | UnreachablePremise Node
   | UndefinedArrow (Loc String)
   | UndefinedType (Loc String)
-  | ConfTypeMismatch (Loc Type) (Loc Type) (Loc SystemDecl)
+  | ConfTypeMismatch String (Loc Type) (Loc Type) (Loc SystemDecl)
+  deriving (Show)
 
 type Lines = [String]
 
@@ -74,9 +78,12 @@ showDefinitionError src err = case err of
                 ]) overlaps
             ]
 
+showReason "" = []
+showReason s = [ bold "  Reason: " ++ s ]
+
 showRuleError :: String -> RuleError -> Lines
 showRuleError src err = case err of
-    TypeMismatch (Loc p1 t1) (Loc p2 t2) ->
+    TypeMismatch reason (Loc p1 t1) (Loc p2 t2) ->
         [ header $ "Type mismatch"
         , "  Type at " ++ showPos p1
         , showPosInSource p1 src
@@ -84,8 +91,7 @@ showRuleError src err = case err of
         , showPosInSource p2 src
         , bold $ "  Expected: " ++ highlight (pprint t2)
         , bold $ "  Received: " ++ highlight (pprint t1)
-        , ""
-        ]
+        ] ++ showReason reason ++ [ "" ]
     InfiniteType tv (Loc p t) ->
         -- This message is kinda impossible to understand I think.
         -- Failure of the "occurs check" is the terminology in the literature for this type of error.
@@ -99,13 +105,17 @@ showRuleError src err = case err of
         ]
     UndefinedVar node vars ->
         [ header $ "Unbound variables in " ++ nodeExplanation node ++ "."
-        , "The unbound variables are: [ " ++ (unwords $ map pprint vars) ++ " ]"
+        , "The unbound variables are: " ++ (unwords $ map pprint vars)
         , showPosInSource (nodePos node) src
+        , "  Variables need to be defined in the initial configuration of the rule, in the conclusion of a transition premise or by a definition premise such as '" ++ (pprint $ head vars) ++ " := 2'"
+        , ""
         ]
     UnusedVar node vars ->
         [ header $ "Unused variables in " ++ nodeExplanation node ++ "."
-        , "The variables not being used are: [ " ++ (unwords $ map pprint vars) ++ " ]"
+        , "The variables not being used are: " ++ (unwords $ map pprint vars)
         , showPosInSource (nodePos node) src
+        , "  If this variable should be used by another rule, it might mean a typo is involved, and if the variable does not need to be used, it should be marked with an underscore by naming it _ or _" ++ (pprint $ head vars) ++ "."
+        , ""
         ]
     UseUnusableVar node vars ->
         [ header $ "Node uses a variable that is marked as unused"
@@ -147,7 +157,7 @@ showRuleError src err = case err of
         [ header $ "Use of undefined type \"" ++ ty ++ "\""
         , showPosInSource p src
         ]
-    ConfTypeMismatch (Loc usedPos usedType) (Loc defPos defType) (Loc confpos sys) ->
+    ConfTypeMismatch r (Loc usedPos usedType) (Loc defPos defType) (Loc confpos sys) ->
         [ header $ "Mismatch between configuration and defined transition system."
         , "The type of the configuration at " ++ showPos usedPos ++ " does not match the type given in the definition of the transition system: " ++ arrow sys
         , ""
@@ -155,8 +165,8 @@ showRuleError src err = case err of
         , showPosInSource usedPos src
         , bold $ "  The system specifies that it should be: " ++ highlight (pprint defType)
         , showPosInSource defPos src
-        , bold $ "These two types should match, but they do not."
-        ]
+        , bold $ "  These two types should match, but they do not."
+        ] ++ showReason r ++ [""]
 
 code c s = "\x1b[" ++ c ++ "m" ++ s ++ "\x1b[m"
 bold = code "1"
@@ -176,6 +186,7 @@ data Context
   | CConf (Loc Conf)
   | CConfSyntaxList [Loc Conf]
   | CConfBinding (Loc Conf) (Loc Conf) (Loc Conf)
+  deriving (Show)
 
 type ContextStack = [Context]
 

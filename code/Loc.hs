@@ -8,6 +8,7 @@ type PosCoord = (String, Int, Int)
 type Pos = (PosCoord, PosCoord)
 data Loc a
   = Loc Pos a
+  deriving (Show)
 
 instance Eq a => Eq (Loc a) where
     (==) (Loc _ x) (Loc _ y) =
@@ -30,9 +31,6 @@ fakePos = (("fake", 0, 0), ("fake", 0, 0))
 
 instance Functor Loc where
   fmap f (Loc l v) = Loc l (f v)
-
-instance (Show a) => Show (Loc a) where
-  show (Loc _ a) = show a
 
 coordFileName (n, _, _) = n
 

@@ -103,8 +103,8 @@ checkTransitionHelper sys Transition { before, after } = do
     return ()
     where
         mismatch :: Loc SystemDecl -> Loc Type -> RuleError -> RuleError
-        mismatch sys sysdef (TypeMismatch use def) =
-            ConfTypeMismatch use def $ Loc (pos sysdef) $ unLoc sys
+        mismatch sys sysdef (TypeMismatch reason use def) =
+            ConfTypeMismatch reason use def $ Loc (pos sysdef) $ unLoc sys
         mismatch _ _ e = e
 
 
@@ -139,7 +139,7 @@ inferVarEx (VBind v l r) = do
 --       function if there is bindings
 inferVar :: Variable -> TCResult RuleError Type
 inferVar Variable { typeName = Just tName } = lookupType fakePos tName
-inferVar x                                  = TVar <$> typeVarOf x
+inferVar v = lookupTypeOr (TVar <$> typeVarOf v) (varName v)
 
 inferExpr :: Pos -> Expr -> TCResult RuleError Type
 inferExpr pos (EVar v) = inferVarEx v
@@ -164,6 +164,9 @@ unify lp rp lt rt =
             return $ TPrimitive x1
         (TCross lts, TCross rts) | length lts == length rts ->
             TCross <$> zipWithM (unify lp rp) lts rts
+        (TCross lts, TCross rts) | length lts /= length rts ->
+            returnError $ TypeMismatch
+                "The tuple-types are not the same length" (Loc lp lt) (Loc rp rt)
         (TFunc lat lrt, TFunc rat rrt) -> do
             a <- unify lp rp lat rat
             b <- unify lp rp lrt rrt
@@ -181,11 +184,13 @@ unify lp rp lt rt =
         -- but unify only gets used for constraining the types such as
         -- in an equality.
         -- Hence it returns an error when the types can't be matched.
-        _               -> returnError $ TypeMismatch (Loc lp lt) (Loc rp rt)
+        _               -> returnError $ TypeMismatch "" (Loc lp lt) (Loc rp rt)
 
 unifyUnion :: Pos -> Pos -> [Type] -> [Type] -> Type -> TCResult RuleError Type
 unifyUnion lp rp fullUnion [] t =
-    returnError $ TypeMismatch (Loc lp (TUnion fullUnion)) (Loc rp t)
+    returnError $ TypeMismatch
+        "The union did not overlap properly"
+        (Loc lp (TUnion fullUnion)) (Loc rp t)
 unifyUnion lp rp fullUnion (l : rest) r = do
     state <- get
     case runStateT (unify lp rp l r) state of
@@ -263,15 +268,18 @@ returnError err = do
     lift (Left (Error (contextStack, err)))
 
 lookupType :: Pos -> String -> TCResult RuleError Type
-lookupType p name = do
+lookupType p name = lookupTypeOr (returnError $ UndefinedType (Loc p name)) name
+
+lookupTypeOr :: TCResult RuleError Type -> String -> TCResult RuleError Type
+lookupTypeOr fail name = do
     TCState { categories } <- get
     case categoryLookup name categories of
         Just c  -> return $ cType $ unLoc c
-        Nothing -> returnError $ UndefinedType (Loc p name)
+        Nothing -> fail
 
 swap = mapError m
     where
-        m (TypeMismatch a b) = TypeMismatch b a
+        m (TypeMismatch r a b) = TypeMismatch r b a
         m e = e
 
 mapError :: (RuleError -> RuleError)
