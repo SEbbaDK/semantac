@@ -12,10 +12,11 @@ import           System.IO             (hPutStr, stderr)
 import           Text.Megaparsec.Error (errorBundlePretty)
 import qualified System.Exit as Exit
 
-import           Ast                   (Variable, name)
+import           Ast                   (Variable, name, sRules)
 import           Binding               (bindCheck)
 import           Errors                (Error (Error), showError, bold, showErrorMessage)
 import           OverlapChecker
+import           Latex
 import           Parser                (doParse)
 import           Pretty
 import           TypeChecker           (typeCheck, CheckResult)
@@ -53,10 +54,7 @@ main = cli =<< execParser (info (parser <**> helper) (fullDesc <> progDesc "test
 -- 8 - Type Errors
 -- other - Bit pattern of the other errors
 cli :: Args -> IO Int
-cli Args {file, printast, printlatex = True} = do
-  putStrLn "latex mode"
-  exit 0
-cli Args {file, printast, printlatex = False, printpretty, printtypes} = do
+cli Args {file, printast, printlatex, printpretty, printtypes} = do
   src <- readFile file
   case doParse file src of
     Left err -> do
@@ -65,6 +63,7 @@ cli Args {file, printast, printlatex = False, printpretty, printtypes} = do
     Right spec -> do
       when printast (putStrLn $ show spec)
       when printpretty (putStrLn $ pprint spec)
+      when printlatex (putStrLn $ latexify $ head $ sRules spec)
       overlapExit <- case overlapCheck spec of
         Nothing -> return 0
         Just e -> do
