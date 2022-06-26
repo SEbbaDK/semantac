@@ -12,7 +12,7 @@ import           System.IO             (hPutStr, stderr)
 import           Text.Megaparsec.Error (errorBundlePretty)
 import qualified System.Exit as Exit
 
-import           Ast                   (Variable, name, sRules)
+import           Ast                   (Variable, name, sRules, normalizeAst)
 import           Binding               (bindCheck)
 import           Errors                (Error (Error), showError, bold, showErrorMessage)
 import           OverlapChecker
@@ -60,7 +60,8 @@ cli Args {file, printast, printlatex, printpretty, printtypes} = do
     Left err -> do
       putErr $ "Parsing Error: " ++ errorBundlePretty err
       exit 1
-    Right spec -> do
+    Right spec_ -> do
+      let spec = normalizeAst spec_
       when printast (putStrLn $ show spec)
       when printpretty (putStrLn $ pprint spec)
       when printlatex (putStrLn $ latexify $ head $ sRules spec)

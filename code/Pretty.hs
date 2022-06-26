@@ -112,9 +112,9 @@ instance Pretty Expr where
 instance Pretty Type where
   pprint (TAlias name)     = name
   pprint (TPrimitive name) = name
-  pprint (TCross xs)       = intercalate " ⨯ " (fmap pprint xs)
-  pprint (TUnion xs)       = intercalate " ∪ " (fmap pprint xs)
-  pprint (TFunc a b)       = pprint a ++ " → " ++ pprint b
+  pprint (TCross xs)       = "(" ++ intercalate " ⨯ " (fmap pprint xs) ++ ")"
+  pprint (TUnion xs)       = "(" ++ intercalate " ∪ " (fmap pprint xs) ++ ")"
+  pprint (TFunc a b)       = "(" ++ pprint a ++ " → " ++ pprint b ++ ")"
   pprint (TVar tv)         = pprint tv
 
 instance Pretty TypeVar where

@@ -58,3 +58,20 @@ normalizeSubst subs =
         normalizeSubst nextSubs
     else
         subs
+
+
+normalizeType :: Type -> Type
+normalizeType (TCross ts) = TCross $ normalizeCross ts
+normalizeType (TUnion ts) = TUnion $ normalizeUnion ts
+normalizeType (TFunc t1 t2) = TFunc (normalizeType t1) (normalizeType t2)
+normalizeType t = t
+
+normalizeCross :: [Type] -> [Type]
+normalizeCross (TCross ts : rest) = normalizeCross (ts ++ rest)
+normalizeCross (t : rest) = normalizeType t : normalizeCross rest
+normalizeCross ts = ts
+
+normalizeUnion :: [Type] -> [Type]
+normalizeUnion (TUnion ts : rest) = normalizeUnion (ts ++ rest)
+normalizeUnion (t : rest) = normalizeType t : normalizeUnion rest
+normalizeUnion ts = ts
