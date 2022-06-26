@@ -123,12 +123,3 @@ data Premise
   | PConstraint Expr
   | PDefinition Expr Expr
   deriving (Show, Eq, Ord)
-
-normalizeAst :: Specification -> Specification
-normalizeAst (Specification {sTerms, sCategories, sRules, sSystems}) =
-  Specification
-    { sTerms = (fmap . fmap) (\t -> t {dType = normalizeType (dType t)}) sTerms
-    , sCategories = (fmap . fmap) (\c -> c {cType = normalizeType (cType c)}) sCategories
-    , sSystems = (fmap . fmap) (\s -> s {initial = fmap normalizeType (initial s), final = fmap normalizeType (final s)}) sSystems
-    , sRules = sRules
-    }

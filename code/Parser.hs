@@ -65,11 +65,11 @@ systemParser :: Parser SystemDecl
 systemParser = do
   try (string "system")
   ws
-  initial <- locced typeParser
+  initial <- locced $ normalizeType <$> typeParser
   ws
   system <- systemNameParser
   ws
-  final <- locced typeParser
+  final <- locced $ normalizeType <$> typeParser
   return $ SystemDecl
     { arrow = system
     , initial = initial
@@ -128,7 +128,7 @@ termParser = do
   ws
   char '='
   ws
-  spec <- typeParser
+  spec <- normalizeType <$> typeParser
   ws
   return $ TermDecl name spec
 
@@ -140,7 +140,7 @@ categoryParser = do
   ws
   isIn <- value (try $ char '=') False <|> value (try (string "∈") <|> string "in") True
   ws
-  type_ <- typeParser
+  type_ <- normalizeType <$> typeParser
   ws
   return $ CategoryDecl name type_ isIn
 
