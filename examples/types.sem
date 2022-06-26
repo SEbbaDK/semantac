@@ -1,0 +1,24 @@
+category syn = Syntax
+category a = "Type Variables"
+category x = "Indentifiers"
+category arr = "Arrows"
+category p = "Primitive Type"
+category T = p ∪ x ∪ a
+category S = "Substitution"
+
+category E = (x ∪ arr) -> T
+
+system (E × Syntax) =>R (T × E × S)
+
+meta substE = (S × E) -> E
+meta subst = (S × S) -> S
+
+rule Def
+<E0, e1>  =>R <T1, E1, S1>
+<E1S, e2> =>R <T2, E2, S2>
+E1S = substE(S1, E1)
+S3 = subst(S1, S2)
+T1 == T2
+-----------------------------------------------
+<E0, e1 ":=" e2> =>R <T1, E2, S3>
+
