@@ -8,22 +8,23 @@ category TVarSet = TVar -> Unit
 category Env = Var -> T
 category Any = Expr U Var U Syntax U (Any x Any) U (Any x Any x Any)
 
+system (Env x Any) |-D  Env
+system (Env x Any) |-C  (Env x Sig)
 system (Env x Any) |-R  (T x Env x Sig)
+system (Env x Sig x T x T) |-U  Sig
 
 meta unit = Unit
 meta emptySig = Sig
 meta tv = Env -> TVarSet
 meta subst = (Sig x Env) -> Env
 meta normalize = Sig -> Sig
-meta SigComp = (Sig x Sig) -> Sig
+meta sigComp = (Sig x Sig) -> Sig
 
 rule Def
 <Env_0, Expr_1> |-R <T1, Env_1, Sig_1>
 <y, Expr_2> |-R <T2, Env_2, Sig_2>
 T1 == T2
 y = subst(Sig_1, Env_1)
-x = SigComp(Sig_2, Sig_1)
+x = sigComp(Sig_2, Sig_1)
 ---
 <Env_0, (Expr_1 ":=" Expr_2)> |-R <T1, Env_2, x>
-
- 
