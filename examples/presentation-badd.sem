@@ -1,0 +1,14 @@
+category e = Syntax
+category i = "integer"
+category env = "environment"
+
+system (e x env) => (i x env)
+
+meta add = (i x i) -> i
+
+rule BAdd
+<e_1, env'> => <i_1, env''>
+<e_2, env''> => <i_2, env'>
+i = add(i_1, i_2)
+---
+<e_1 "+" e_2, env> => <e_3, env'>
