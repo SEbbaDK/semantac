@@ -2,7 +2,7 @@ category x = "Id"
 category n = "Int"
 category l = "Loc"
 category o = "Operator"
-category e = Syntax ∪ n ∪ x
+category e = Syntax U n U x
 
 category env  =  x -> l
 category sto  =  l -> n
